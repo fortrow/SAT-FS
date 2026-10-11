@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ -z "${CXNFS_CLASSPATH:-}" ]; then
+  CXNFS_HOME="${CXNFS_HOME:-/opt/cxnfs}"
+  CXNFS_CLASSPATH="${CXNFS_HOME}/cxnfs.jar:${CXNFS_HOME}/lib/*"
+fi
+
+JAVA_BIN="${JAVA_BIN:-java}"
+# Intentionally split CXNFS_JAVA_OPTS so callers can pass multiple JVM flags,
+# e.g. CXNFS_JAVA_OPTS="-Xmx4g -XX:+UseG1GC".
+exec "$JAVA_BIN" ${CXNFS_JAVA_OPTS:-} -cp "$CXNFS_CLASSPATH" com.fortrow.cxnfs.Cxnfs "$@"

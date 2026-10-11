@@ -1,0 +1,5 @@
+d /etc/cxnfs 0750 root cxnfs -
+d /var/lib/cxnfs 0750 cxnfs cxnfs -
+d /var/cache/cxnfs 0750 cxnfs cxnfs -
+d /var/log/cxnfs 0750 cxnfs cxnfs -
+d /run/cxnfs 0750 cxnfs cxnfs -

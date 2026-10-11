@@ -1,0 +1,35 @@
+# Copy to /etc/cxnfs/server.properties, replace placeholders, then restrict
+# ownership to root:cxnfs and mode 0640.
+serve.root.0=/datasets=/srv/datasets
+serve.root.1=/outputs=/srv/cxnfs-outputs
+serve.host=0.0.0.0
+serve.control-port=4509
+serve.transport-port=4510
+serve.bulk-transport=quic
+serve.initial-cords=1
+serve.max-cords=64
+serve.adaptive-cords=true
+serve.live-write-mode=positional
+serve.payload-staging-memory-bytes=536870912
+serve.payload-spill-dir=/var/cache/cxnfs/payload-staging
+serve.repository-root=/var/lib/cxnfs/repository
+serve.keystore=/etc/cxnfs/server.p12
+serve.keystore-password-file=/etc/cxnfs/server.p12.pass
+serve.ready-file=/run/cxnfs/server.ready
+serve.health-file=/run/cxnfs/server.health
+serve.health-interval-ms=1000
+serve.shutdown-file=/run/cxnfs/server.stop
+serve.shutdown-poll-ms=250
+serve.daemon-lock-file=/run/cxnfs/server.lock
+
+auth.mechanisms=username_password
+auth.user.trainer.password=REPLACE_WITH_LONG_RANDOM_PASSWORD
+auth.user.eval.password=REPLACE_WITH_DIFFERENT_LONG_RANDOM_PASSWORD
+
+# Optional per-user remote namespace jails. Omit to allow all served roots.
+# auth.user.trainer.directories=/datasets,/outputs
+# auth.user.eval.directories=/datasets
+
+# Optional bearer-token shape for service-to-service probes or controlled jobs:
+# auth.mechanisms=username_password,bearer_token
+# auth.bearer-token.training=REPLACE_WITH_LONG_RANDOM_TOKEN

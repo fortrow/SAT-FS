@@ -1,0 +1,81 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+.kotlin
+
+### Python ###
+__pycache__/
+*.pyc
+
+### Backups & Rollbacks ###
+.rollback/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### Docusaurus ###
+docs/.docusaurus/
+docs/build/
+docs/node_modules/
+
+### Linux kernel module/tool builds ###
+linux/cxnfs_blockfs/*.ko
+linux/cxnfs_blockfs/*.mod
+linux/cxnfs_blockfs/*.mod.c
+linux/cxnfs_blockfs/*.o
+linux/cxnfs_blockfs/.*.cmd
+linux/cxnfs_blockfs/Module.symvers
+linux/cxnfs_blockfs/modules.order
+linux/cxnfs_blockfs/tools/mkfs.cxnfsblk
+linux/cxnfs_blockfs/tools/fsck.cxnfsblk
+linux/cxnfs_blockfs/tools/ctl_probe
+linux/cxnfs_blockfs/tools/cxnfs-blockfs-ctl
+
+### Electron / GUI ###
+gui/cordshock/node_modules/
+gui/cordshock/out/
+gui/cordshock/release/
+node_modules/
+
+### Python Packaging & Cache ###
+*.egg-info/
+.pytest_cache/
+python/dist/
+python/build/
+
+### Native / C artifacts ###
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+target/native/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store

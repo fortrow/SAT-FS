@@ -1,0 +1,32 @@
+[Unit]
+Description=CXNFS repository maintenance
+Documentation=file:/usr/share/doc/cxnfs/README.md
+After=cxnfs.service
+Conflicts=cxnfs.service
+OnSuccess=cxnfs.service
+OnFailure=cxnfs.service
+
+[Service]
+Type=oneshot
+User=cxnfs
+Group=cxnfs
+EnvironmentFile=/etc/cxnfs/cxnfs.env
+RuntimeDirectory=cxnfs
+StateDirectory=cxnfs
+CacheDirectory=cxnfs
+LogsDirectory=cxnfs
+UMask=0077
+
+ExecStart=/usr/local/bin/cxnfs server audit-repository ${CXNFS_REPOSITORY_ROOT} --fail-on-issues ${CXNFS_MAINTENANCE_FAIL_ON_AUDIT_ISSUES} --report ${CXNFS_REPOSITORY_AUDIT_REPORT}
+ExecStart=/usr/local/bin/cxnfs server compact-repository ${CXNFS_REPOSITORY_ROOT} --dry-run ${CXNFS_MAINTENANCE_DRY_RUN} --orphan-container-min-age-ms ${CXNFS_REPOSITORY_ORPHAN_CONTAINER_MIN_AGE_MS} --temp-file-min-age-ms ${CXNFS_REPOSITORY_TEMP_FILE_MIN_AGE_MS} --report ${CXNFS_REPOSITORY_MAINTENANCE_REPORT}
+ExecStart=/usr/local/bin/cxnfs server clean-payload-staging ${CXNFS_PAYLOAD_SPILL_DIR} --dry-run ${CXNFS_MAINTENANCE_DRY_RUN} --min-age-ms ${CXNFS_PAYLOAD_STAGING_MIN_AGE_MS} --report ${CXNFS_PAYLOAD_STAGING_CLEANUP_REPORT}
+
+TimeoutStartSec=1h
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/cxnfs /var/cache/cxnfs /var/log/cxnfs
+CapabilityBoundingSet=
+LockPersonality=true

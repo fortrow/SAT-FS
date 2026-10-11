@@ -1,0 +1,57 @@
+[project]
+name = "sat-fs"
+version = "0.1.0"
+description = "Saturated Async Transfer File System (SAT-FS) - High-throughput multi-threaded network file system."
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+prepare = ["pyarrow>=15"]
+quic = ["aioquic>=1.3.0"]
+
+[project.scripts]
+sat-fs = "satfs.client_cli:main"
+satfs = "satfs.client_cli:main"
+satfs-client = "satfs.client_cli:main"
+satfs-health = "satfs.health:main"
+satfs-dataset = "satfs.prepare:main"
+satfs-prepare = "satfs.prepare:main"
+satfs-benchmark = "satfs.benchmark:main"
+satfs-mount = "satfs.mount_handoff:main"
+satfs-workload-evidence = "satfs.workload_evidence:main"
+satfs-workload-decision = "satfs.workload_decision:main"
+satfs-protocol-fixtures = "satfs.protocol_report:main"
+
+cxnfs-client = "cxnfs.client_cli:main"
+cxnfs-health = "cxnfs.health:main"
+cxnfs-dataset = "cxnfs.prepare:main"
+cxnfs-prepare = "cxnfs.prepare:main"
+cxnfs-protocol-fixtures = "cxnfs.protocol_report:main"
+cxnfs-weighted-mds-plan = "cxnfs.torch_dataset:main_weighted_mds_plan"
+cxnfs-trainer-contract = "cxnfs.torch_dataset:main_trainer_contract"
+cxnfs-trainer-acceptance-fixture = "cxnfs.torch_dataset:main_trainer_acceptance_fixture"
+cxnfs-trainer-handoff-acceptance = "cxnfs.torch_dataset:main_trainer_handoff_acceptance"
+cxnfs-trainer-handoff = "cxnfs.torch_dataset:main_trainer_handoff"
+cxnfs-trainer-preflight = "cxnfs.torch_dataset:main_trainer_preflight"
+cxnfs-trainer-network-preflight = "cxnfs.torch_dataset:main_trainer_network_preflight"
+cxnfs-trainer-distributed-plan = "cxnfs.torch_dataset:main_trainer_distributed_plan"
+cxnfs-trainer-integration-smoke = "cxnfs.torch_dataset:main_trainer_integration_smoke"
+cxnfs-trainer-runtime-smoke = "cxnfs.torch_dataset:main_trainer_runtime_smoke"
+cxnfs-trainer-distributed-runtime-smoke = "cxnfs.torch_dataset:main_trainer_distributed_runtime_smoke"
+cxnfs-trainer-readiness-bundle = "cxnfs.torch_dataset:main_trainer_readiness_bundle"
+cxnfs-trainer-loop-contract-check = "cxnfs.torch_dataset:main_trainer_loop_contract_check"
+cxnfs-trainer-loop-replay = "cxnfs.torch_dataset:main_trainer_loop_replay"
+cxnfs-trainer-pipeline-smoke = "cxnfs.torch_dataset:main_trainer_pipeline_smoke"
+cxnfs-trainer-surface-check = "cxnfs.torch_dataset:main_trainer_surface_check"
+cxnfs-trainer-surface-matrix = "cxnfs.torch_dataset:main_trainer_surface_matrix"
+cxnfs-trainer-contract-benchmark = "cxnfs.torch_dataset:main_trainer_contract_benchmark"
+cxnfs-trainer-stream-smoke = "cxnfs.torch_dataset:main_trainer_stream_smoke"
+cxnfs-trainer-stream-benchmark = "cxnfs.torch_dataset:main_trainer_stream_smoke"
+cxnfs-trainer-workload-benchmark = "cxnfs.torch_dataset:main_trainer_workload_benchmark"
+cxnfs-workload-evidence = "cxnfs.workload_evidence:main"
+cxnfs-workload-decision = "cxnfs.workload_decision:main"
+cxnfs-benchmark = "cxnfs.benchmark:main"
+cxnfs-mount = "cxnfs.mount_handoff:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

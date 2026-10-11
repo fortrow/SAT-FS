@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ -z "${SATFS_CLASSPATH:-}" ]; then
+  SATFS_HOME="${SATFS_HOME:-/opt/sat-fs}"
+  SATFS_CLASSPATH="${SATFS_HOME}/sat-fs.jar:${SATFS_HOME}/cxnfs.jar:${SATFS_HOME}/lib/*"
+fi
+
+JAVA_BIN="${JAVA_BIN:-java}"
+# Intentionally split SATFS_JAVA_OPTS so callers can pass multiple JVM flags,
+# e.g. SATFS_JAVA_OPTS="-Xmx4g -XX:+UseG1GC".
+exec "$JAVA_BIN" ${SATFS_JAVA_OPTS:-} -cp "$SATFS_CLASSPATH" com.fortrow.satfs.Satfs "$@"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Run CXNFS repository maintenance
+Documentation=file:/usr/share/doc/cxnfs/README.md
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=cxnfs-maintenance.service
+
+[Install]
+WantedBy=timers.target
