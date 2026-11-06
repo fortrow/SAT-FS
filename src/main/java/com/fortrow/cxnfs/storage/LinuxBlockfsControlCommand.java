@@ -16,6 +16,10 @@ import java.util.concurrent.TimeUnit;
 
 public final class LinuxBlockfsControlCommand {
     public static final Duration DEFAULT_PROCESS_TIMEOUT = Duration.ofSeconds(30);
+    public static final Path DEFAULT_DEVICE = java.nio.file.Files.exists(Path.of("/dev/satfs_blockfs_ctl"))
+            ? Path.of("/dev/satfs_blockfs_ctl")
+            : Path.of("/dev/cxnfs_blockfs_ctl");
+    public static final Path DEFAULT_EXECUTABLE = Path.of("satfs-blockfs-ctl");
     private static final int TIMEOUT_EXIT_CODE = 124;
 
     private final Path executable;
@@ -23,7 +27,7 @@ public final class LinuxBlockfsControlCommand {
     private final CommandRunner runner;
 
     public LinuxBlockfsControlCommand(Path executable) {
-        this(executable, Path.of("/dev/cxnfs_blockfs_ctl"), DEFAULT_PROCESS_TIMEOUT);
+        this(executable, DEFAULT_DEVICE, DEFAULT_PROCESS_TIMEOUT);
     }
 
     public LinuxBlockfsControlCommand(Path executable, Path device, Duration processTimeout) {

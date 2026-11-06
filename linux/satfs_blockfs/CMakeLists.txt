@@ -61,35 +61,44 @@ function(cxnfs_tool target source)
 	add_dependencies(${target} prepare-build-env)
 endfunction()
 
-cxnfs_tool(mkfs.cxnfsblk
-	tools/mkfs.cxnfsblk.c
-	"${CMAKE_CURRENT_SOURCE_DIR}/tools/cxnfs_tool_common.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}/cxnfs_blockfs_disk.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}/cxnfs_blockfs_meta.h"
+cxnfs_tool(mkfs.satfsblk
+	tools/mkfs.satfsblk.c
+	"${CMAKE_CURRENT_SOURCE_DIR}/tools/satfs_tool_common.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/satfs_blockfs_disk.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/satfs_blockfs_meta.h"
 )
 
-cxnfs_tool(fsck.cxnfsblk
-	tools/fsck.cxnfsblk.c
-	"${CMAKE_CURRENT_SOURCE_DIR}/tools/cxnfs_tool_common.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}/cxnfs_blockfs_disk.h"
-	"${CMAKE_CURRENT_SOURCE_DIR}/cxnfs_blockfs_meta.h"
+cxnfs_tool(fsck.satfsblk
+	tools/fsck.satfsblk.c
+	"${CMAKE_CURRENT_SOURCE_DIR}/tools/satfs_tool_common.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/satfs_blockfs_disk.h"
+	"${CMAKE_CURRENT_SOURCE_DIR}/satfs_blockfs_meta.h"
 )
 
-set(CXNFS_TOOL_TARGETS mkfs.cxnfsblk fsck.cxnfsblk)
+set(CXNFS_TOOL_TARGETS mkfs.satfsblk fsck.satfsblk)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	cxnfs_tool(ctl_probe
 		tools/ctl_probe.c
-		"${CMAKE_CURRENT_SOURCE_DIR}/cxnfs_blockfs_uapi.h"
+		"${CMAKE_CURRENT_SOURCE_DIR}/satfs_blockfs_uapi.h"
 	)
-	cxnfs_tool(cxnfs-blockfs-ctl
-		tools/cxnfs-blockfs-ctl.c
-		"${CMAKE_CURRENT_SOURCE_DIR}/cxnfs_blockfs_uapi.h"
+	cxnfs_tool(satfs-blockfs-ctl
+		tools/satfs-blockfs-ctl.c
+		"${CMAKE_CURRENT_SOURCE_DIR}/satfs_blockfs_uapi.h"
 	)
-	list(APPEND CXNFS_TOOL_TARGETS ctl_probe cxnfs-blockfs-ctl)
+	list(APPEND CXNFS_TOOL_TARGETS ctl_probe satfs-blockfs-ctl)
 endif()
 
-add_custom_target(tools DEPENDS ${CXNFS_TOOL_TARGETS})
+add_custom_target(tool-symlinks
+	COMMAND "${CMAKE_COMMAND}" -E create_symlink mkfs.satfsblk "${CXNFS_TOOL_OUTPUT_DIR}/mkfs.cxnfsblk"
+	COMMAND "${CMAKE_COMMAND}" -E create_symlink fsck.satfsblk "${CXNFS_TOOL_OUTPUT_DIR}/fsck.cxnfsblk"
+	COMMAND "${CMAKE_COMMAND}" -E create_symlink satfs-blockfs-ctl "${CXNFS_TOOL_OUTPUT_DIR}/cxnfs-blockfs-ctl"
+	DEPENDS ${CXNFS_TOOL_TARGETS}
+	COMMENT "Creating backward-compatible tool symlinks"
+	VERBATIM
+)
+
+add_custom_target(tools DEPENDS ${CXNFS_TOOL_TARGETS} tool-symlinks)
 
 add_custom_target(tool-smoke
 	COMMAND "${CMAKE_COMMAND}" -E env "CXNFS_TOOL_SMOKE_REPORT_DIR=${CMAKE_BINARY_DIR}/tool-smoke-reports" sh "${CMAKE_CURRENT_SOURCE_DIR}/tools/tool-smoke.sh" "${CXNFS_TOOL_OUTPUT_DIR}"

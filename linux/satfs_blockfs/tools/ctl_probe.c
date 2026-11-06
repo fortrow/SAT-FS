@@ -7,11 +7,11 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include "../cxnfs_blockfs_uapi.h"
+#include "../satfs_blockfs_uapi.h"
 
 int main(int argc, char **argv)
 {
-	const char *device = argc > 1 ? argv[1] : "/dev/cxnfs_blockfs_ctl";
+	const char *device = argc > 1 ? argv[1] : (access("/dev/satfs_blockfs_ctl", F_OK) == 0 ? "/dev/satfs_blockfs_ctl" : "/dev/cxnfs_blockfs_ctl");
 	struct cxnfs_blockfs_ioc_stats stats = {
 		.abi_version = CXNFS_BLOCKFS_IOC_ABI_VERSION,
 	};

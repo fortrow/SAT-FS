@@ -2,9 +2,12 @@
 set -eu
 
 tool_dir=${1:-.}
-mkfs_tool="$tool_dir/mkfs.cxnfsblk"
-fsck_tool="$tool_dir/fsck.cxnfsblk"
-ctl_tool="$tool_dir/cxnfs-blockfs-ctl"
+mkfs_tool="$tool_dir/mkfs.satfsblk"
+[ -x "$mkfs_tool" ] || mkfs_tool="$tool_dir/mkfs.cxnfsblk"
+fsck_tool="$tool_dir/fsck.satfsblk"
+[ -x "$fsck_tool" ] || fsck_tool="$tool_dir/fsck.cxnfsblk"
+ctl_tool="$tool_dir/satfs-blockfs-ctl"
+[ -x "$ctl_tool" ] || ctl_tool="$tool_dir/cxnfs-blockfs-ctl"
 
 if [ ! -x "$mkfs_tool" ]; then
 	echo "missing mkfs tool: $mkfs_tool" >&2

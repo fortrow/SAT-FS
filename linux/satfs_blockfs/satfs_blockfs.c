@@ -24,9 +24,9 @@
 #include <linux/version.h>
 #include <linux/wait.h>
 
-#include "cxnfs_blockfs.h"
-#include "cxnfs_blockfs_disk.h"
-#include "cxnfs_blockfs_uapi.h"
+#include "satfs_blockfs.h"
+#include "satfs_blockfs_disk.h"
+#include "satfs_blockfs_uapi.h"
 
 static struct inode *cxnfs_blockfs_get_inode(struct super_block *sb,
 					     unsigned long inode_number,
@@ -1679,7 +1679,8 @@ static int cxnfs_blockfs_validate_super(struct cxnfs_disk_super *disk,
 	u32 block_size = le32_to_cpu(disk->block_size);
 	u32 version = le32_to_cpu(disk->version);
 
-	if (memcmp(disk->magic, CXNFS_DISK_MAGIC, CXNFS_DISK_MAGIC_LEN) != 0)
+	if (memcmp(disk->magic, SATFS_DISK_MAGIC, SATFS_DISK_MAGIC_LEN) != 0 &&
+	    memcmp(disk->magic, CXNFS_DISK_MAGIC, CXNFS_DISK_MAGIC_LEN) != 0)
 		return -EINVAL;
 	if (version != CXNFS_DISK_VERSION)
 		return -EINVAL;
@@ -1969,6 +1970,7 @@ static long cxnfs_blockfs_ctl_ioctl(struct file *file, unsigned int cmd,
 				    unsigned long arg)
 {
 	switch (cmd) {
+	case SATFS_BLOCKFS_IOC_REGISTER_EXTENT:
 	case CXNFS_BLOCKFS_IOC_REGISTER_EXTENT: {
 		struct cxnfs_blockfs_ioc_extent *extent;
 		int ret;
@@ -1983,6 +1985,7 @@ static long cxnfs_blockfs_ctl_ioctl(struct file *file, unsigned int cmd,
 		kfree(extent);
 		return ret;
 	}
+	case SATFS_BLOCKFS_IOC_INVALIDATE:
 	case CXNFS_BLOCKFS_IOC_INVALIDATE: {
 		struct cxnfs_blockfs_ioc_invalidate *invalidate;
 		int ret;
@@ -1997,6 +2000,7 @@ static long cxnfs_blockfs_ctl_ioctl(struct file *file, unsigned int cmd,
 		kfree(invalidate);
 		return ret;
 	}
+	case SATFS_BLOCKFS_IOC_STATS:
 	case CXNFS_BLOCKFS_IOC_STATS: {
 		struct cxnfs_blockfs_ioc_stats stats = {
 			.abi_version = CXNFS_BLOCKFS_IOC_ABI_VERSION,
@@ -2016,6 +2020,7 @@ static long cxnfs_blockfs_ctl_ioctl(struct file *file, unsigned int cmd,
 			return -EFAULT;
 		return 0;
 	}
+	case SATFS_BLOCKFS_IOC_STATS_V2:
 	case CXNFS_BLOCKFS_IOC_STATS_V2: {
 		struct cxnfs_blockfs_ioc_stats_v2 stats = {
 			.abi_version = CXNFS_BLOCKFS_IOC_ABI_VERSION,
@@ -2061,6 +2066,7 @@ static long cxnfs_blockfs_ctl_ioctl(struct file *file, unsigned int cmd,
 			return -EFAULT;
 		return 0;
 	}
+	case SATFS_BLOCKFS_IOC_REGISTER_FILE:
 	case CXNFS_BLOCKFS_IOC_REGISTER_FILE: {
 		struct cxnfs_blockfs_ioc_file *file_record;
 		int ret;
@@ -2075,9 +2081,11 @@ static long cxnfs_blockfs_ctl_ioctl(struct file *file, unsigned int cmd,
 		kfree(file_record);
 		return ret;
 	}
+	case SATFS_BLOCKFS_IOC_CLEAR_NAMESPACE:
 	case CXNFS_BLOCKFS_IOC_CLEAR_NAMESPACE:
 		cxnfs_blockfs_clear_live_namespace();
 		return 0;
+	case SATFS_BLOCKFS_IOC_CLEAR_MOUNT_NAMESPACE:
 	case CXNFS_BLOCKFS_IOC_CLEAR_MOUNT_NAMESPACE: {
 		struct cxnfs_blockfs_ioc_clear_namespace *clear;
 		u64 mount_id;
@@ -2103,6 +2111,7 @@ static long cxnfs_blockfs_ctl_ioctl(struct file *file, unsigned int cmd,
 		cxnfs_blockfs_clear_mount_namespace(mount_id);
 		return 0;
 	}
+	case SATFS_BLOCKFS_IOC_NEXT_MISS_EVENT:
 	case CXNFS_BLOCKFS_IOC_NEXT_MISS_EVENT: {
 		struct cxnfs_blockfs_ioc_miss_event *event;
 		int ret;

@@ -1,5 +1,8 @@
 import errno
+import io
 import os
+from pathlib import Path
+import tempfile
 import unittest
 
 import cxnfs
@@ -37,9 +40,14 @@ from cxnfs.blockfs import (
     BlockfsPayloadAllocation,
     BlockfsPayloadAllocationSnapshot,
     BlockfsPayloadAllocationStore,
+    BlockfsStageResult,
     audit_blockfs_metadata,
     build_blockfs_extent_hints,
     describe_blockfs_extent_hint_build,
+    stage_download_to_blockfs,
+    stage_file_to_blockfs,
+    stage_from_network_server,
+    stage_stream_to_blockfs,
     LinuxBlockfsControl,
     LinuxCxbfsControl,
     CxbfsExtent,
@@ -670,6 +678,154 @@ class LinuxBlockfsControlTest(unittest.TestCase):
 
         self.assertEqual("/dev/custom", opened["path"])
         self.assertEqual(os.O_RDWR, opened["flags"])
+
+
+class BlockfsDatasetStagingTest(unittest.TestCase):
+    def test_stage_stream_and_audit_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "metadata"
+            payload = Path(temp) / "payload.bin"
+            sample_data = b"Hello, SAT-FS dataset block staging!" * 500
+
+            res = stage_stream_to_blockfs(
+                metadata_root=root,
+                payload_target=payload,
+                stream=io.BytesIO(sample_data),
+                target_relative_path="train/audio.wav",
+                chunk_size=4096,
+            )
+
+            self.assertEqual("train/audio.wav", res.path)
+            self.assertEqual(len(sample_data), res.size)
+            self.assertEqual(5, res.chunks_count)
+            self.assertEqual(5, res.extents_count)
+            self.assertFalse(res.published_to_kernel)
+
+            self.assertTrue((root / "namespace/current.sat").exists())
+            self.assertTrue((root / "namespace/current.cxn").exists())
+            self.assertTrue((root / "manifest-index/current.sat").exists())
+            self.assertTrue((root / "manifest-index/current.cxn").exists())
+            self.assertTrue((root / "payload-map/current.sat").exists())
+            self.assertTrue((root / "payload-map/current.cxn").exists())
+            self.assertTrue((root / "extent-hints/current.sat").exists())
+            self.assertTrue((root / "extent-hints/current.cxn").exists())
+
+            ns = BlockfsNamespaceStore().load(root)
+            manifest = BlockfsManifestIndexStore().load(root)
+            hints = BlockfsExtentHintStore().load(root)
+            audit = audit_blockfs_metadata(ns, manifest, hints)
+            self.assertEqual(1, audit.namespace_files)
+            self.assertEqual(1, audit.manifest_files)
+            self.assertEqual(5, audit.manifest_chunks)
+            self.assertEqual(5, audit.extent_hints)
+
+            self.assertEqual(sample_data, payload.read_bytes())
+
+    def test_stage_file_and_subsequent_staging_allocations(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "metadata"
+            payload = Path(temp) / "payload.bin"
+            file1 = Path(temp) / "source1.bin"
+            file2 = Path(temp) / "source2.bin"
+
+            data1 = b"ABC" * 2000
+            data2 = b"XYZ" * 1500
+            file1.write_bytes(data1)
+            file2.write_bytes(data2)
+
+            res1 = stage_file_to_blockfs(
+                metadata_root=root,
+                payload_target=payload,
+                source_file_path=file1,
+                target_relative_path="data/part1.bin",
+                chunk_size=4096,
+            )
+            self.assertEqual(2, res1.inode_number)
+
+            res2 = stage_file_to_blockfs(
+                metadata_root=root,
+                payload_target=payload,
+                source_file_path=file2,
+                target_relative_path="data/part2.bin",
+                chunk_size=4096,
+            )
+            self.assertEqual(3, res2.inode_number)
+
+            ns = BlockfsNamespaceStore().load(root)
+            self.assertEqual(2, len(ns.files))
+            allocs = BlockfsPayloadAllocationStore().load(root)
+            self.assertEqual(4, len(allocs.allocations))
+
+            audit = audit_blockfs_metadata(
+                ns,
+                BlockfsManifestIndexStore().load(root),
+                BlockfsExtentHintStore().load(root),
+            )
+            self.assertEqual(2, audit.namespace_files)
+            self.assertEqual(4, audit.manifest_chunks)
+
+    def test_stage_from_network_server_with_ctl_client(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "metadata"
+            payload = Path(temp) / "payload.bin"
+            data = b"Remote server mock data" * 100
+
+            fake = FakeIoctl()
+            ctl = LinuxBlockfsControl(
+                "/dev/fake",
+                opener=lambda path, flags: 88,
+                closer=lambda fd: None,
+                ioctl=fake,
+            )
+
+            def mock_reader(path: str, offset: int, length: int) -> bytes:
+                return data[offset : offset + length]
+
+            res = stage_from_network_server(
+                metadata_root=root,
+                payload_target=payload,
+                reader=mock_reader,
+                remote_path="/remote/dataset/train.tar",
+                target_relative_path="train.tar",
+                remote_size=len(data),
+                chunk_size=512,
+                ctl_client=ctl,
+            )
+
+            self.assertTrue(res.published_to_kernel)
+            self.assertTrue(any(call[1] == IOCTL_REGISTER_FILE for call in fake.calls))
+            self.assertTrue(any(call[1] == IOCTL_REGISTER_EXTENT for call in fake.calls))
+
+    def test_stage_duplicate_file_raises_without_overwrite(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "metadata"
+            payload = Path(temp) / "payload.bin"
+            data = b"test data"
+
+            stage_stream_to_blockfs(
+                metadata_root=root,
+                payload_target=payload,
+                stream=io.BytesIO(data),
+                target_relative_path="duplicate.txt",
+            )
+
+            with self.assertRaises(FileExistsError):
+                stage_stream_to_blockfs(
+                    metadata_root=root,
+                    payload_target=payload,
+                    stream=io.BytesIO(b"other"),
+                    target_relative_path="duplicate.txt",
+                    allow_overwrite=False,
+                )
+
+            res = stage_stream_to_blockfs(
+                metadata_root=root,
+                payload_target=payload,
+                stream=io.BytesIO(b"updated data"),
+                target_relative_path="duplicate.txt",
+                allow_overwrite=True,
+            )
+            self.assertEqual(len(b"updated data"), res.size)
 
 
 if __name__ == "__main__":

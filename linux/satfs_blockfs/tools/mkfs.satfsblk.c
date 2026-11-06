@@ -11,9 +11,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../cxnfs_blockfs_disk.h"
-#include "../cxnfs_blockfs_meta.h"
-#include "cxnfs_tool_common.h"
+#include "../satfs_blockfs_disk.h"
+#include "../satfs_blockfs_meta.h"
+#include "satfs_tool_common.h"
 
 enum {
 	MIN_BLOCKS = 128,
@@ -53,7 +53,7 @@ static int parse_args(int argc, char **argv, struct mkfs_options *opts)
 	int i;
 
 	memset(opts, 0, sizeof(*opts));
-	opts->label = "cxnfs";
+	opts->label = "satfs";
 
 	if (argc < 2)
 		return -1;
@@ -146,7 +146,7 @@ static int build_super(const struct mkfs_options *opts,
 	uint64_t cursor = 1;
 
 	memset(super, 0, sizeof(*super));
-	memcpy(super->magic, CXNFS_DISK_MAGIC, CXNFS_DISK_MAGIC_LEN);
+	memcpy(super->magic, SATFS_DISK_MAGIC, SATFS_DISK_MAGIC_LEN);
 	super->version = cxnfs_to_le32(CXNFS_DISK_VERSION);
 	super->block_size = cxnfs_to_le32(CXNFS_DISK_BLOCK_SIZE);
 	fill_uuid(super->fs_uuid);
@@ -253,15 +253,15 @@ static int write_metadata_root(const struct mkfs_options *opts,
 	}
 
 	memset(&header, 0, sizeof(header));
-	memcpy(header.magic, CXNFS_META_ROOT_MAGIC, CXNFS_META_MAGIC_LEN);
-	header.version = cxnfs_to_le32(CXNFS_META_VERSION);
+	memcpy(header.magic, SATFS_META_ROOT_MAGIC, SATFS_META_MAGIC_LEN);
+	header.version = cxnfs_to_le32(SATFS_META_VERSION);
 	header.header_size = cxnfs_to_le32(sizeof(header));
-	memcpy(header.fs_uuid, super->fs_uuid, CXNFS_DISK_UUID_LEN);
+	memcpy(header.fs_uuid, super->fs_uuid, SATFS_DISK_UUID_LEN);
 	header.flags = cxnfs_to_le64(CXNFS_META_FLAG_BOOTSTRAP_READY);
 	header.max_cords = super->max_cords;
 	header.readahead_pages = super->readahead_pages;
 
-	if (snprintf(root_header_path, sizeof(root_header_path), "%s/root.cxn",
+	if (snprintf(root_header_path, sizeof(root_header_path), "%s/root.sat",
 		     opts->metadata_root) >= (int)sizeof(root_header_path))
 		return -1;
 
@@ -278,6 +278,19 @@ static int write_metadata_root(const struct mkfs_options *opts,
 		return -1;
 	}
 	close(fd);
+
+	/* Also write legacy root.cxn for backward compatibility */
+	memcpy(header.magic, CXNFS_META_ROOT_MAGIC, CXNFS_META_MAGIC_LEN);
+	if (snprintf(root_header_path, sizeof(root_header_path), "%s/root.cxn",
+		     opts->metadata_root) < (int)sizeof(root_header_path)) {
+		fd = open(root_header_path,
+			  O_WRONLY | O_CREAT | (opts->force ? O_TRUNC : O_EXCL), 0600);
+		if (fd >= 0) {
+			if (cxnfs_pwrite_full(fd, &header, sizeof(header), 0) == 0)
+				(void)fsync(fd);
+			close(fd);
+		}
+	}
 	return 0;
 }
 
@@ -296,6 +309,7 @@ static int write_mkfs_report(const struct mkfs_options *opts,
 	if (fd < 0)
 		return -1;
 	if (dprintf(fd,
+		    "satfs.blockfs.mkfs.v1\n"
 		    "cxnfs.blockfs.mkfs.v1\n"
 		    "path=%s\n"
 		    "blocks=%llu\n"

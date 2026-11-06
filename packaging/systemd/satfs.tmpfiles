@@ -1,0 +1,4 @@
+d /run/satfs 0750 cxnfs cxnfs -
+d /var/cache/satfs 0750 cxnfs cxnfs -
+d /var/lib/satfs 0750 cxnfs cxnfs -
+d /var/log/satfs 0750 cxnfs cxnfs -

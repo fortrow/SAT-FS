@@ -23,10 +23,13 @@ LOOP_DEV_B=""
 MOUNTED=0
 MOUNTED_B=0
 LOADED=0
-MKFS="$TOOLS_DIR/mkfs.cxnfsblk"
-FSCK="$TOOLS_DIR/fsck.cxnfsblk"
+MKFS="$TOOLS_DIR/mkfs.satfsblk"
+[ -x "$MKFS" ] || MKFS="$TOOLS_DIR/mkfs.cxnfsblk"
+FSCK="$TOOLS_DIR/fsck.satfsblk"
+[ -x "$FSCK" ] || FSCK="$TOOLS_DIR/fsck.cxnfsblk"
 CTL_PROBE="$TOOLS_DIR/ctl_probe"
-CTL="$TOOLS_DIR/cxnfs-blockfs-ctl"
+CTL="$TOOLS_DIR/satfs-blockfs-ctl"
+[ -x "$CTL" ] || CTL="$TOOLS_DIR/cxnfs-blockfs-ctl"
 
 cleanup() {
 	if [ "$MOUNTED_B" -eq 1 ]; then
@@ -94,22 +97,32 @@ printf 'cxnfs verified payload from blockfs\n' | dd of="$PAYLOAD" conv=notrunc s
 PAYLOAD_HASH="$( { printf 'cxnfs.chunk.v1\0'; cat "$PAYLOAD"; } | sha256sum | awk '{print $1}' )"
 sudo dd if="$PAYLOAD" of="$IMAGE" bs=4096 seek=1 conv=notrunc status=none
 
-sudo insmod "$ROOT_DIR/cxnfs_blockfs.ko"
+if [ -f "$ROOT_DIR/satfs_blockfs.ko" ]; then
+	sudo insmod "$ROOT_DIR/satfs_blockfs.ko"
+else
+	sudo insmod "$ROOT_DIR/cxnfs_blockfs.ko"
+fi
 LOADED=1
-test -e /dev/cxnfs_blockfs_ctl
+CTL_DEV="/dev/satfs_blockfs_ctl"
+[ -e "$CTL_DEV" ] || CTL_DEV="/dev/cxnfs_blockfs_ctl"
+test -e "$CTL_DEV"
 
-sudo "$CTL_PROBE" /dev/cxnfs_blockfs_ctl
-sudo "$CTL" stats
+sudo "$CTL_PROBE" "$CTL_DEV"
+sudo "$CTL" --device "$CTL_DEV" stats
 
 LOOP_DEV="$(sudo losetup --find --show "$IMAGE")"
 LOOP_DEV_B="$(sudo losetup --find --show "$IMAGE_B")"
 sudo mkdir -p "$MOUNTPOINT"
 sudo mkdir -p "$MOUNTPOINT_B"
-sudo mount -t cxnfsblk \
+FS_TYPE="satfsblk"
+if ! grep -q "satfsblk" /proc/filesystems 2>/dev/null; then
+	FS_TYPE="cxnfsblk"
+fi
+sudo mount -t "$FS_TYPE" \
 	-o "metadata_root=$META_ROOT,max_cords=64,readahead_pages=128,miss_wait_ms=3000" \
 	"$LOOP_DEV" "$MOUNTPOINT"
 MOUNTED=1
-sudo mount -t cxnfsblk \
+sudo mount -t "$FS_TYPE" \
 	-o "metadata_root=$META_ROOT_B,max_cords=8,readahead_pages=32,miss_wait_ms=0" \
 	"$LOOP_DEV_B" "$MOUNTPOINT_B"
 MOUNTED_B=1

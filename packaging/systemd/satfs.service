@@ -1,0 +1,42 @@
+[Unit]
+Description=SAT-FS (Saturated Async Transfer File System) server
+Documentation=file:/usr/share/doc/satfs/README.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=cxnfs
+Group=cxnfs
+EnvironmentFile=-/etc/satfs/satfs.env
+EnvironmentFile=-/etc/cxnfs/cxnfs.env
+RuntimeDirectory=satfs
+StateDirectory=satfs
+CacheDirectory=satfs
+LogsDirectory=satfs
+UMask=0077
+
+ExecStartPre=/bin/rm -f ${CXNFS_READY_FILE} ${CXNFS_HEALTH_FILE} ${CXNFS_SHUTDOWN_FILE} ${CXNFS_DAEMON_LOCK_FILE}
+ExecStart=/usr/local/bin/sat-fs serve --config ${CXNFS_AUTH_CONFIG}
+ExecStartPost=/usr/bin/timeout ${CXNFS_START_TIMEOUT_SECONDS} /bin/sh -c 'until test -s "$CXNFS_READY_FILE"; do sleep 0.1; done'
+ExecStartPost=/usr/bin/timeout ${CXNFS_START_TIMEOUT_SECONDS} /bin/sh -c 'until test -s "$CXNFS_HEALTH_FILE"; do sleep 0.1; done'
+ExecStartPost=/usr/local/bin/sat-fs server check-health ${CXNFS_HEALTH_FILE} --max-age-ms ${CXNFS_HEALTH_MAX_AGE_MS} --fail-on-unhealthy true --report ${CXNFS_HEALTH_REPORT}
+ExecReload=/bin/sh -c 'rm -f "$CXNFS_READY_FILE"; touch "$CXNFS_SHUTDOWN_FILE"'
+ExecStop=/usr/bin/touch ${CXNFS_SHUTDOWN_FILE}
+
+Restart=always
+RestartSec=2
+TimeoutStartSec=45
+TimeoutStopSec=45
+KillSignal=SIGTERM
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/run/cxnfs /var/lib/cxnfs /var/cache/cxnfs /var/log/cxnfs /run/satfs /var/lib/satfs /var/cache/satfs /var/log/satfs /srv
+CapabilityBoundingSet=
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -2371,7 +2371,11 @@ run env PYTHONPATH="$PYTHON_RUN_PATH" "$PYTHON_BIN" -m cxnfs.protocol_report "$R
 	--fail-on-missing true
 
 if [ "$SKIP_BLOCKFS_SMOKE" != "1" ] || [ "$SKIP_BLOCKFS_MODULE" != "1" ]; then
-	run "$CMAKE_BIN" -S "$ROOT_DIR/linux/cxnfs_blockfs" -B "$BLOCKFS_BUILD_DIR" -DCXNFS_DOWNLOAD_DEPS=OFF
+	BLOCKFS_SRC="$ROOT_DIR/linux/satfs_blockfs"
+	if [ ! -d "$BLOCKFS_SRC" ]; then
+		BLOCKFS_SRC="$ROOT_DIR/linux/cxnfs_blockfs"
+	fi
+	run "$CMAKE_BIN" -S "$BLOCKFS_SRC" -B "$BLOCKFS_BUILD_DIR" -DCXNFS_DOWNLOAD_DEPS=OFF
 fi
 if [ "$SKIP_BLOCKFS_MODULE" != "1" ]; then
 	if [ "$(uname -s)" = "Linux" ]; then

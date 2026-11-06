@@ -76,7 +76,9 @@ public final class ServerCli {
             "--host",
             "--control-port",
             "--transport-port",
-            "--listen"
+            "--listen",
+            "--direct-write-access",
+            "--direct-write"
     );
 
     public int run(String[] args, PrintStream out, PrintStream err) {
@@ -87,7 +89,7 @@ public final class ServerCli {
         try {
             return switch (args[0]) {
                 case "serve" -> serve(args, out);
-                case "serve-blockfs", "serve-cxbfs" -> serveBlockfs(args, out);
+                case "serve-blockfs", "serve-cxbfs", "serve-satfs" -> serveBlockfs(args, out);
                 case "read-blockfs-range", "read-cxbfs-range" -> readBlockfsRange(args, out);
                 case "audit-blockfs-metadata", "audit-cxbfs-metadata" -> auditBlockfsMetadata(args, out);
                 case "build-blockfs-extent-hints", "build-cxbfs-extent-hints" -> buildBlockfsExtentHints(args, out);
@@ -202,6 +204,9 @@ public final class ServerCli {
             out.println("cord_pool_max=" + cordPool.maxCords());
             out.println("cord_pool_adaptive=" + cordPool.adaptive());
             out.println("live_write_mode=" + server.config().liveWriteMode().configValue());
+            boolean directWriteAccess = booleanOption(options, "--direct-write-access", false)
+                    || booleanOption(options, "--direct-write", false);
+            out.println("direct_write_access=" + (directWriteAccess ? "enabled" : "disabled"));
             writePayloadStagingConfig(out, server.config().payloadStagingConfig());
             out.println("auth=" + mechanisms(authenticationPolicy));
             return maybeStartControlListener(server, options, out, "server facade loaded", null, daemonLock);
@@ -272,6 +277,13 @@ public final class ServerCli {
             out.println("container_transfer_binding=" + binding("quic-tls13-udp", server.config().containerTransferBinding()));
             out.println("cipher_suite=" + server.config().controlBinding().security().cipherSuite().protocolName());
             out.println("bulk_transport=" + bulkTransportOption(options));
+            boolean directWriteAccess = booleanOption(options, "--direct-write-access", false)
+                    || booleanOption(options, "--direct-write", false);
+            out.println("direct_write_access=" + (directWriteAccess ? "enabled" : "disabled"));
+            String payloadDevice = options.get("--payload-device");
+            if (payloadDevice != null) {
+                out.println("payload_device=" + payloadDevice);
+            }
             writePayloadStagingConfig(out, server.config().payloadStagingConfig());
             writeBlockfsMissWorkerConfig(out, missWorker);
             out.println("auth=" + mechanisms(authenticationPolicy));

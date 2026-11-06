@@ -9,6 +9,9 @@ JFLUX_CORE="${CXNFS_JFLUX_CORE:-}"
 FUSE_ADAPTER="${CXNFS_FUSE_ADAPTER:-}"
 PREFIX="${CXNFS_PREFIX:-/opt/cxnfs}"
 BIN_DIR="${CXNFS_BIN_DIR:-/usr/local/bin}"
+SBIN_DIR="${CXNFS_SBIN_DIR:-/sbin}"
+TOOLS_DIR="${CXNFS_TOOLS_DIR:-}"
+SKIP_JAR=0
 CONFIG_DIR="${CXNFS_CONFIG_DIR:-/etc/cxnfs}"
 SYSTEMD_DIR="${CXNFS_SYSTEMD_DIR:-/etc/systemd/system}"
 STATE_DIR="${CXNFS_STATE_DIR:-/var/lib/cxnfs}"
@@ -24,7 +27,7 @@ usage() {
   cat <<'EOF'
 Usage: ./install-linux.sh [options]
 
-Installs pre-built CXNFS jars and packaging assets for Linux.
+Installs pre-built SAT-FS / CXNFS jars, tools, and packaging assets for Linux.
 
 Options:
   --jar <path>          Built CXNFS jar. Defaults to target/cxnfs-0.1.0.jar.
@@ -34,8 +37,11 @@ Options:
                         or ../jflux/target/jflux-1.0.6-core.jar.
   --fuse-adapter <path> Native Linux FUSE adapter. Defaults to
                         target/native/cxnfs-fuse when present.
+  --tools-dir <path>    Pre-built blockfs tools directory (mkfs.satfsblk, etc.).
+  --skip-jar            Skip jar installation (for tools/systemd-only installs).
   --prefix <path>       Runtime install directory. Default: /opt/cxnfs.
   --bin-dir <path>      Launcher install directory. Default: /usr/local/bin.
+  --sbin-dir <path>     Block filesystem tools directory. Default: /sbin.
   --config-dir <path>   Config directory. Default: /etc/cxnfs.
   --systemd-dir <path>  Systemd unit directory. Default: /etc/systemd/system.
   --dataset-dir <path>  Example dataset jail. Default: /srv/datasets.
@@ -63,6 +69,9 @@ while [ $# -gt 0 ]; do
     --fuse-adapter) FUSE_ADAPTER="${2:-}"; shift 2 ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     --bin-dir) BIN_DIR="${2:-}"; shift 2 ;;
+    --sbin-dir) SBIN_DIR="${2:-}"; shift 2 ;;
+    --tools-dir) TOOLS_DIR="${2:-}"; shift 2 ;;
+    --skip-jar) SKIP_JAR=1; shift ;;
     --config-dir) CONFIG_DIR="${2:-}"; shift 2 ;;
     --systemd-dir) SYSTEMD_DIR="${2:-}"; shift 2 ;;
     --dataset-dir) DATASET_DIR="${2:-}"; shift 2 ;;
@@ -86,8 +95,10 @@ if [ -z "$FUSE_ADAPTER" ] && [ -f "$SCRIPT_DIR/target/native/cxnfs-fuse" ]; then
   FUSE_ADAPTER="$SCRIPT_DIR/target/native/cxnfs-fuse"
 fi
 
-[ -f "$JAR_PATH" ] || die "missing CXNFS jar: $JAR_PATH"
-[ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR"
+if [ "$SKIP_JAR" -ne 1 ]; then
+  [ -f "$JAR_PATH" ] || die "missing CXNFS jar: $JAR_PATH"
+  [ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR"
+fi
 [ -z "$FUSE_ADAPTER" ] || [ -f "$FUSE_ADAPTER" ] || die "missing native FUSE adapter: $FUSE_ADAPTER"
 [ -f "$SCRIPT_DIR/packaging/bin/cxnfs" ] || die "missing packaging/bin/cxnfs"
 
@@ -224,6 +235,7 @@ EOF
 mkdir_p 0755 "$PREFIX"
 mkdir_p 0755 "$PREFIX/lib"
 mkdir_p 0755 "$BIN_DIR"
+mkdir_p 0755 "$SBIN_DIR"
 mkdir_p 0750 "$CONFIG_DIR"
 mkdir_p 0750 "$STATE_DIR/repository"
 mkdir_p 0750 "$CACHE_DIR/payload-staging"
@@ -235,10 +247,52 @@ mkdir_p 0755 "$SYSTEMD_DIR"
 mkdir_p 0755 /etc/tmpfiles.d
 mkdir_p 0755 /etc/sysusers.d
 
-install_file 0644 "$JAR_PATH" "$PREFIX/cxnfs.jar"
-copy_dependency_jars
-copy_jflux_core
+if [ "$SKIP_JAR" -ne 1 ]; then
+  install_file 0644 "$JAR_PATH" "$PREFIX/cxnfs.jar"
+  (cd "$(target_path "$PREFIX")" && ln -sf cxnfs.jar sat-fs.jar && ln -sf cxnfs.jar satfs.jar)
+  copy_dependency_jars
+  copy_jflux_core
+fi
+
 install_file 0755 "$SCRIPT_DIR/packaging/bin/cxnfs" "$BIN_DIR/cxnfs"
+if [ -f "$SCRIPT_DIR/packaging/bin/sat-fs" ]; then
+  install_file 0755 "$SCRIPT_DIR/packaging/bin/sat-fs" "$BIN_DIR/sat-fs"
+  (cd "$(target_path "$BIN_DIR")" && ln -sf sat-fs satfs)
+fi
+
+find_blockfs_tool() {
+  tool_name="$1"
+  for cand in "$TOOLS_DIR/$tool_name" \
+              "$SCRIPT_DIR/target/linux/$tool_name" \
+              "$SCRIPT_DIR/linux/satfs_blockfs/tools/$tool_name" \
+              "$SCRIPT_DIR/target/blockfs-build/tools/$tool_name" \
+              "$SCRIPT_DIR/target/blockfs-tools/$tool_name"; do
+    if [ -n "$cand" ] && [ -f "$cand" ]; then
+      printf '%s' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+MKFS_TOOL=$(find_blockfs_tool "mkfs.satfsblk" || find_blockfs_tool "mkfs.cxnfsblk" || true)
+if [ -n "$MKFS_TOOL" ]; then
+  install_file 0755 "$MKFS_TOOL" "$SBIN_DIR/mkfs.satfsblk"
+  (cd "$(target_path "$SBIN_DIR")" && ln -sf mkfs.satfsblk mkfs.sat-fs && ln -sf mkfs.satfsblk mkfs.cxnfsblk)
+fi
+
+FSCK_TOOL=$(find_blockfs_tool "fsck.satfsblk" || find_blockfs_tool "fsck.cxnfsblk" || true)
+if [ -n "$FSCK_TOOL" ]; then
+  install_file 0755 "$FSCK_TOOL" "$SBIN_DIR/fsck.satfsblk"
+  (cd "$(target_path "$SBIN_DIR")" && ln -sf fsck.satfsblk fsck.sat-fs && ln -sf fsck.satfsblk fsck.cxnfsblk)
+fi
+
+CTL_TOOL=$(find_blockfs_tool "satfs-blockfs-ctl" || find_blockfs_tool "cxnfs-blockfs-ctl" || true)
+if [ -n "$CTL_TOOL" ]; then
+  install_file 0755 "$CTL_TOOL" "$BIN_DIR/satfs-blockfs-ctl"
+  (cd "$(target_path "$BIN_DIR")" && ln -sf satfs-blockfs-ctl cxnfs-blockfs-ctl)
+fi
+
 if [ -n "$FUSE_ADAPTER" ]; then
   install_file 0755 "$FUSE_ADAPTER" "$BIN_DIR/cxnfs-fuse"
 fi
@@ -247,6 +301,11 @@ install_file 0644 "$SCRIPT_DIR/packaging/systemd/cxnfs-maintenance.service" "$SY
 install_file 0644 "$SCRIPT_DIR/packaging/systemd/cxnfs-maintenance.timer" "$SYSTEMD_DIR/cxnfs-maintenance.timer"
 install_file 0644 "$SCRIPT_DIR/packaging/systemd/cxnfs.tmpfiles" /etc/tmpfiles.d/cxnfs.conf
 install_file 0644 "$SCRIPT_DIR/packaging/systemd/cxnfs.sysusers" /etc/sysusers.d/cxnfs.conf
+if [ -f "$SCRIPT_DIR/packaging/systemd/satfs.service" ]; then
+  install_file 0644 "$SCRIPT_DIR/packaging/systemd/satfs.service" "$SYSTEMD_DIR/satfs.service"
+  install_file 0644 "$SCRIPT_DIR/packaging/systemd/satfs.tmpfiles" /etc/tmpfiles.d/satfs.conf
+  install_file 0644 "$SCRIPT_DIR/packaging/systemd/satfs.sysusers" /etc/sysusers.d/satfs.conf
+fi
 install_file 0640 "$SCRIPT_DIR/packaging/systemd/cxnfs.env.example" "$CONFIG_DIR/cxnfs.env"
 write_config
 
@@ -265,9 +324,20 @@ if [ -z "$DESTDIR" ] && command -v systemd-tmpfiles >/dev/null 2>&1; then
   systemd-tmpfiles --create /etc/tmpfiles.d/cxnfs.conf >/dev/null 2>&1 || true
 fi
 
-echo "Installed CXNFS Linux files."
-echo "Jar: $PREFIX/cxnfs.jar"
-echo "Launcher: $BIN_DIR/cxnfs"
+echo "Installed SAT-FS / CXNFS Linux files."
+if [ "$SKIP_JAR" -ne 1 ]; then
+  echo "Jar: $PREFIX/cxnfs.jar (symlinks: sat-fs.jar, satfs.jar)"
+fi
+echo "Launcher: $BIN_DIR/cxnfs (and $BIN_DIR/sat-fs)"
+if [ -n "$MKFS_TOOL" ]; then
+  echo "BlockFS mkfs: $SBIN_DIR/mkfs.satfsblk (symlinks: mkfs.sat-fs, mkfs.cxnfsblk)"
+fi
+if [ -n "$FSCK_TOOL" ]; then
+  echo "BlockFS fsck: $SBIN_DIR/fsck.satfsblk (symlinks: fsck.sat-fs, fsck.cxnfsblk)"
+fi
+if [ -n "$CTL_TOOL" ]; then
+  echo "BlockFS control: $BIN_DIR/satfs-blockfs-ctl (symlink: cxnfs-blockfs-ctl)"
+fi
 if [ -n "$FUSE_ADAPTER" ]; then
   echo "FUSE adapter: $BIN_DIR/cxnfs-fuse"
 else

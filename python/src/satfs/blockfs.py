@@ -7,16 +7,28 @@ public project vocabulary moves to CXBFS for the Linux-only filesystem.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import argparse
 import errno
 import fcntl
+import hashlib
 import os
 from pathlib import Path
 import struct
-from typing import Callable
+import sys
+from typing import Any, BinaryIO, Callable
 
+
+BLOCK_SIZE = 4096
+DEFAULT_STAGING_CHUNK_SIZE = 1024 * 1024
+DEFAULT_DEVICE = (
+    "/dev/satfs_blockfs_ctl"
+    if os.path.exists("/dev/satfs_blockfs_ctl")
+    else "/dev/cxnfs_blockfs_ctl"
+)
 
 ABI_VERSION = 1
 IOC_MAGIC = ord("C")
+
 
 EXTENT_VERIFIED = 1 << 0
 EXTENT_CAN_READ_EARLY = 1 << 1
@@ -276,12 +288,19 @@ class BlockfsPayloadAllocationSnapshot:
 
 class BlockfsNamespaceStore:
     relative_path = Path("namespace/current.cxn")
+    sat_relative_path = Path("namespace/current.sat")
 
     def snapshot_path(self, metadata_root: str | os.PathLike[str]) -> Path:
         return Path(metadata_root) / self.relative_path
 
     def load(self, metadata_root: str | os.PathLike[str]) -> BlockfsNamespaceSnapshot:
-        return self.load_file(self.snapshot_path(metadata_root))
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        if sat_path.exists():
+            return self.load_file(sat_path)
+        primary = self.snapshot_path(metadata_root)
+        if primary.exists():
+            return self.load_file(primary)
+        return self.load_file(sat_path)
 
     def load_file(self, path: str | os.PathLike[str]) -> BlockfsNamespaceSnapshot:
         values = self._read_properties(Path(path))
@@ -308,10 +327,13 @@ class BlockfsNamespaceStore:
         metadata_root: str | os.PathLike[str],
         snapshot: BlockfsNamespaceSnapshot,
     ) -> Path:
-        path = self.snapshot_path(metadata_root)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.write_file(path, snapshot)
-        return path
+        primary = self.snapshot_path(metadata_root)
+        primary.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(primary, snapshot)
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        sat_path.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(sat_path, snapshot)
+        return primary
 
     def write_file(
         self,
@@ -365,6 +387,7 @@ class BlockfsNamespaceStore:
 
 class BlockfsExtentHintStore:
     relative_path = Path("extent-hints/current.cxn")
+    sat_relative_path = Path("extent-hints/current.sat")
 
     def snapshot_path(self, metadata_root: str | os.PathLike[str]) -> Path:
         return Path(metadata_root) / self.relative_path
@@ -373,16 +396,25 @@ class BlockfsExtentHintStore:
         self,
         metadata_root: str | os.PathLike[str],
     ) -> BlockfsExtentHintsSnapshot:
-        return self.load_file(self.snapshot_path(metadata_root))
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        if sat_path.exists():
+            return self.load_file(sat_path)
+        primary = self.snapshot_path(metadata_root)
+        if primary.exists():
+            return self.load_file(primary)
+        return self.load_file(sat_path)
 
     def load_if_exists(
         self,
         metadata_root: str | os.PathLike[str],
     ) -> BlockfsExtentHintsSnapshot | None:
-        path = self.snapshot_path(metadata_root)
-        if not path.exists():
-            return None
-        return self.load_file(path)
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        if sat_path.exists():
+            return self.load_file(sat_path)
+        primary = self.snapshot_path(metadata_root)
+        if primary.exists():
+            return self.load_file(primary)
+        return None
 
     def load_file(
         self,
@@ -417,10 +449,13 @@ class BlockfsExtentHintStore:
         metadata_root: str | os.PathLike[str],
         snapshot: BlockfsExtentHintsSnapshot,
     ) -> Path:
-        path = self.snapshot_path(metadata_root)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.write_file(path, snapshot)
-        return path
+        primary = self.snapshot_path(metadata_root)
+        primary.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(primary, snapshot)
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        sat_path.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(sat_path, snapshot)
+        return primary
 
     def write_file(
         self,
@@ -451,6 +486,7 @@ class BlockfsExtentHintStore:
 
 class BlockfsPayloadAllocationStore:
     relative_path = Path("payload-map/current.cxn")
+    sat_relative_path = Path("payload-map/current.sat")
 
     def snapshot_path(self, metadata_root: str | os.PathLike[str]) -> Path:
         return Path(metadata_root) / self.relative_path
@@ -459,16 +495,25 @@ class BlockfsPayloadAllocationStore:
         self,
         metadata_root: str | os.PathLike[str],
     ) -> BlockfsPayloadAllocationSnapshot:
-        return self.load_file(self.snapshot_path(metadata_root))
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        if sat_path.exists():
+            return self.load_file(sat_path)
+        primary = self.snapshot_path(metadata_root)
+        if primary.exists():
+            return self.load_file(primary)
+        return self.load_file(sat_path)
 
     def load_if_exists(
         self,
         metadata_root: str | os.PathLike[str],
     ) -> BlockfsPayloadAllocationSnapshot | None:
-        path = self.snapshot_path(metadata_root)
-        if not path.exists():
-            return None
-        return self.load_file(path)
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        if sat_path.exists():
+            return self.load_file(sat_path)
+        primary = self.snapshot_path(metadata_root)
+        if primary.exists():
+            return self.load_file(primary)
+        return None
 
     def load_file(
         self,
@@ -499,10 +544,13 @@ class BlockfsPayloadAllocationStore:
         metadata_root: str | os.PathLike[str],
         snapshot: BlockfsPayloadAllocationSnapshot,
     ) -> Path:
-        path = self.snapshot_path(metadata_root)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.write_file(path, snapshot)
-        return path
+        primary = self.snapshot_path(metadata_root)
+        primary.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(primary, snapshot)
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        sat_path.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(sat_path, snapshot)
+        return primary
 
     def write_file(
         self,
@@ -593,6 +641,7 @@ class BlockfsManifestIndexSnapshot:
 
 class BlockfsManifestIndexStore:
     relative_path = Path("manifest-index/current.cxn")
+    sat_relative_path = Path("manifest-index/current.sat")
 
     def snapshot_path(self, metadata_root: str | os.PathLike[str]) -> Path:
         return Path(metadata_root) / self.relative_path
@@ -601,16 +650,25 @@ class BlockfsManifestIndexStore:
         self,
         metadata_root: str | os.PathLike[str],
     ) -> BlockfsManifestIndexSnapshot:
-        return self.load_file(self.snapshot_path(metadata_root))
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        if sat_path.exists():
+            return self.load_file(sat_path)
+        primary = self.snapshot_path(metadata_root)
+        if primary.exists():
+            return self.load_file(primary)
+        return self.load_file(sat_path)
 
     def load_if_exists(
         self,
         metadata_root: str | os.PathLike[str],
     ) -> BlockfsManifestIndexSnapshot | None:
-        path = self.snapshot_path(metadata_root)
-        if not path.exists():
-            return None
-        return self.load_file(path)
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        if sat_path.exists():
+            return self.load_file(sat_path)
+        primary = self.snapshot_path(metadata_root)
+        if primary.exists():
+            return self.load_file(primary)
+        return None
 
     def load_file(
         self,
@@ -662,10 +720,13 @@ class BlockfsManifestIndexStore:
         metadata_root: str | os.PathLike[str],
         snapshot: BlockfsManifestIndexSnapshot,
     ) -> Path:
-        path = self.snapshot_path(metadata_root)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        self.write_file(path, snapshot)
-        return path
+        primary = self.snapshot_path(metadata_root)
+        primary.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(primary, snapshot)
+        sat_path = Path(metadata_root) / self.sat_relative_path
+        sat_path.parent.mkdir(parents=True, exist_ok=True)
+        self.write_file(sat_path, snapshot)
+        return primary
 
     def write_file(
         self,
@@ -996,12 +1057,18 @@ class BlockfsMissEvent:
 class LinuxBlockfsControl:
     def __init__(
         self,
-        device: str = "/dev/cxnfs_blockfs_ctl",
+        device: str | None = None,
         *,
         opener: Callable[[str, int], int] = os.open,
         closer: Callable[[int], None] = os.close,
         ioctl: Callable[..., int | bytes | bytearray] = fcntl.ioctl,
     ) -> None:
+        if device is None:
+            device = (
+                "/dev/satfs_blockfs_ctl"
+                if os.path.exists("/dev/satfs_blockfs_ctl")
+                else "/dev/cxnfs_blockfs_ctl"
+            )
         self.device = device
         self._opener = opener
         self._closer = closer
@@ -1149,3 +1216,396 @@ LinuxCxbfsControl = LinuxBlockfsControl
 audit_cxbfs_metadata = audit_blockfs_metadata
 build_cxbfs_extent_hints = build_blockfs_extent_hints
 describe_cxbfs_extent_hint_build = describe_blockfs_extent_hint_build
+
+
+@dataclass(frozen=True)
+class BlockfsStageResult:
+    inode_number: int
+    path: str
+    size: int
+    file_hash: bytes
+    chunks_count: int
+    extents_count: int
+    published_to_kernel: bool = False
+    metadata_generation: int = 1
+
+
+def stage_stream_to_blockfs(
+    metadata_root: str | os.PathLike[str],
+    payload_target: str | os.PathLike[str] | None,
+    stream: BinaryIO | Any,
+    target_relative_path: str,
+    *,
+    size: int | None = None,
+    chunk_size: int = DEFAULT_STAGING_CHUNK_SIZE,
+    ctl_client: LinuxBlockfsControl | None = None,
+    allow_overwrite: bool = False,
+    mode: int = 0o444,
+) -> BlockfsStageResult:
+    if not target_relative_path or target_relative_path.startswith("/") or target_relative_path.endswith("/"):
+        raise ValueError(f"invalid relative path: {target_relative_path}")
+    for part in target_relative_path.split("/"):
+        if part in ("", ".", ".."):
+            raise ValueError(f"invalid relative path component: {target_relative_path}")
+
+    metadata_dir = Path(metadata_root)
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+
+    ns_store = BlockfsNamespaceStore()
+    manifest_store = BlockfsManifestIndexStore()
+    alloc_store = BlockfsPayloadAllocationStore()
+    hints_store = BlockfsExtentHintStore()
+
+    try:
+        ns = ns_store.load(metadata_dir)
+        manifest_index = manifest_store.load(metadata_dir)
+        alloc_snapshot = alloc_store.load(metadata_dir)
+        hints_snapshot = hints_store.load_if_exists(metadata_dir)
+    except (FileNotFoundError, ValueError):
+        ns = BlockfsNamespaceSnapshot(0, ())
+        manifest_index = BlockfsManifestIndexSnapshot(0, ())
+        alloc_snapshot = BlockfsPayloadAllocationSnapshot(0, ())
+        hints_snapshot = BlockfsExtentHintsSnapshot(0, ())
+
+    existing_file = next((f for f in ns.files if f.path == target_relative_path), None)
+    if existing_file is not None:
+        if not allow_overwrite:
+            raise FileExistsError(f"file already exists in blockfs namespace: {target_relative_path}")
+        inode_number = existing_file.inode_number
+        files = [f for f in ns.files if f.inode_number != inode_number]
+        manifest_entries = [e for e in manifest_index.entries if e.inode_number != inode_number]
+        allocations = [a for a in alloc_snapshot.allocations if a.inode_number != inode_number]
+        hints = [h for h in (hints_snapshot.extents if hints_snapshot else ()) if h.inode_number != inode_number]
+    else:
+        used_inodes = {f.inode_number for f in ns.files}
+        inode_number = 2
+        while inode_number in used_inodes:
+            inode_number += 1
+        files = list(ns.files)
+        manifest_entries = list(manifest_index.entries)
+        allocations = list(alloc_snapshot.allocations)
+        hints = list(hints_snapshot.extents if hints_snapshot else ())
+
+    if allocations:
+        highest_byte = max(a.payload_block * BLOCK_SIZE + a.payload_offset + a.payload_length for a in allocations)
+        start_byte = ((highest_byte + BLOCK_SIZE - 1) // BLOCK_SIZE) * BLOCK_SIZE
+    else:
+        start_byte = 0
+
+    if payload_target is None:
+        payload_target_path = metadata_dir / "cache" / "container.cache"
+        payload_target_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        payload_target_path = Path(payload_target)
+
+    if payload_target_path.exists():
+        pfd = os.open(str(payload_target_path), os.O_RDWR)
+    else:
+        payload_target_path.parent.mkdir(parents=True, exist_ok=True)
+        pfd = os.open(str(payload_target_path), os.O_RDWR | os.O_CREAT, 0o644)
+
+    hasher = hashlib.sha256()
+    file_offset = 0
+    new_chunks: list[BlockfsManifestChunk] = []
+    new_allocs: list[BlockfsPayloadAllocation] = []
+    new_extents: list[BlockfsExtent] = []
+
+    try:
+        os.lseek(pfd, start_byte, os.SEEK_SET)
+        while True:
+            to_read = chunk_size
+            if size is not None:
+                remaining = size - file_offset
+                if remaining <= 0:
+                    break
+                to_read = min(chunk_size, remaining)
+
+            chunk_data = stream.read(to_read)
+            if not chunk_data:
+                break
+            chunk_len = len(chunk_data)
+            hasher.update(chunk_data)
+            chunk_hash = hashlib.sha256(chunk_data).digest()
+
+            written = 0
+            while written < chunk_len:
+                n = os.write(pfd, chunk_data[written:])
+                if n == 0:
+                    raise OSError("failed to write payload to target")
+                written += n
+
+            abs_offset = start_byte + file_offset
+            p_block = abs_offset // BLOCK_SIZE
+            p_offset = abs_offset % BLOCK_SIZE
+
+            new_chunks.append(
+                BlockfsManifestChunk(
+                    file_offset=file_offset,
+                    length=chunk_len,
+                    chunk_hash=chunk_hash,
+                )
+            )
+            new_allocs.append(
+                BlockfsPayloadAllocation(
+                    inode_number=inode_number,
+                    file_offset=file_offset,
+                    payload_block=p_block,
+                    payload_offset=p_offset,
+                    payload_length=chunk_len,
+                )
+            )
+            new_extents.append(
+                BlockfsExtent(
+                    inode_number=inode_number,
+                    file_offset=file_offset,
+                    payload_block=p_block,
+                    payload_offset=p_offset,
+                    payload_length=chunk_len,
+                    expected_hash=chunk_hash,
+                    flags=DEFAULT_EXTENT_FLAGS,
+                )
+            )
+            file_offset += chunk_len
+    finally:
+        os.close(pfd)
+
+    total_size = file_offset
+    total_hash = hasher.digest()
+
+    staged_file = BlockfsFile(
+        inode_number=inode_number,
+        path=target_relative_path,
+        size=total_size,
+        mode=mode,
+    )
+    files.append(staged_file)
+    manifest_entries.append(
+        BlockfsManifestEntry(
+            inode_number=inode_number,
+            path=target_relative_path,
+            size=total_size,
+            file_hash=total_hash,
+            chunks=tuple(new_chunks),
+        )
+    )
+    allocations.extend(new_allocs)
+    hints.extend(new_extents)
+
+    next_gen = ns.generation + 1
+    new_ns = BlockfsNamespaceSnapshot(next_gen, tuple(files))
+    new_manifest = BlockfsManifestIndexSnapshot(next_gen, tuple(manifest_entries))
+    new_alloc = BlockfsPayloadAllocationSnapshot(next_gen, tuple(allocations))
+    new_hints = BlockfsExtentHintsSnapshot(next_gen, tuple(hints))
+
+    ns_store.write(metadata_dir, new_ns)
+    manifest_store.write(metadata_dir, new_manifest)
+    alloc_store.write(metadata_dir, new_alloc)
+    hints_store.write(metadata_dir, new_hints)
+
+    published = False
+    if ctl_client is not None:
+        ctl_client.register_file(staged_file)
+        for ext in new_extents:
+            ctl_client.register_extent(ext, allow_unsupported=True)
+        published = True
+
+    return BlockfsStageResult(
+        inode_number=inode_number,
+        path=target_relative_path,
+        size=total_size,
+        file_hash=total_hash,
+        chunks_count=len(new_chunks),
+        extents_count=len(new_extents),
+        published_to_kernel=published,
+        metadata_generation=next_gen,
+    )
+
+
+def stage_file_to_blockfs(
+    metadata_root: str | os.PathLike[str],
+    payload_target: str | os.PathLike[str] | None,
+    source_file_path: str | os.PathLike[str],
+    target_relative_path: str | None = None,
+    *,
+    chunk_size: int = DEFAULT_STAGING_CHUNK_SIZE,
+    ctl_client: LinuxBlockfsControl | None = None,
+    allow_overwrite: bool = False,
+    mode: int = 0o444,
+) -> BlockfsStageResult:
+    source_path = Path(source_file_path)
+    if not source_path.is_file():
+        raise FileNotFoundError(f"source file not found: {source_file_path}")
+    if target_relative_path is None:
+        target_relative_path = source_path.name
+    with source_path.open("rb") as f:
+        return stage_stream_to_blockfs(
+            metadata_root=metadata_root,
+            payload_target=payload_target,
+            stream=f,
+            target_relative_path=target_relative_path,
+            size=source_path.stat().st_size,
+            chunk_size=chunk_size,
+            ctl_client=ctl_client,
+            allow_overwrite=allow_overwrite,
+            mode=mode,
+        )
+
+
+def stage_download_to_blockfs(
+    metadata_root: str | os.PathLike[str],
+    payload_target: str | os.PathLike[str] | None,
+    url: str,
+    target_relative_path: str,
+    *,
+    chunk_size: int = DEFAULT_STAGING_CHUNK_SIZE,
+    ctl_client: LinuxBlockfsControl | None = None,
+    allow_overwrite: bool = False,
+    mode: int = 0o444,
+    timeout: float = 30.0,
+) -> BlockfsStageResult:
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"User-Agent": "SATFS-BlockfsStager/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        content_length_header = response.headers.get("Content-Length")
+        size = int(content_length_header) if content_length_header else None
+        return stage_stream_to_blockfs(
+            metadata_root=metadata_root,
+            payload_target=payload_target,
+            stream=response,
+            target_relative_path=target_relative_path,
+            size=size,
+            chunk_size=chunk_size,
+            ctl_client=ctl_client,
+            allow_overwrite=allow_overwrite,
+            mode=mode,
+        )
+
+
+def stage_from_network_server(
+    metadata_root: str | os.PathLike[str],
+    payload_target: str | os.PathLike[str] | None,
+    reader: Callable[[str, int, int], bytes] | Any,
+    remote_path: str,
+    target_relative_path: str | None = None,
+    *,
+    remote_size: int | None = None,
+    chunk_size: int = DEFAULT_STAGING_CHUNK_SIZE,
+    ctl_client: LinuxBlockfsControl | None = None,
+    allow_overwrite: bool = False,
+    mode: int = 0o444,
+) -> BlockfsStageResult:
+    if target_relative_path is None:
+        target_relative_path = remote_path.lstrip("/").split("/")[-1]
+
+    class _NetworkReaderStream:
+        def __init__(self, r_func: Callable[[str, int, int], bytes], r_path: str, total_len: int | None):
+            self.r_func = r_func
+            self.r_path = r_path
+            self.total_len = total_len
+            self.offset = 0
+
+        def read(self, n: int = -1) -> bytes:
+            if n <= 0:
+                n = chunk_size
+            if self.total_len is not None and self.offset >= self.total_len:
+                return b""
+            if self.total_len is not None:
+                n = min(n, self.total_len - self.offset)
+            data = self.r_func(self.r_path, self.offset, n)
+            self.offset += len(data)
+            return data
+
+    if callable(reader):
+        stream = _NetworkReaderStream(reader, remote_path, remote_size)
+    elif hasattr(reader, "read_range"):
+        stream = _NetworkReaderStream(lambda p, off, ln: reader.read_range(p, off, ln), remote_path, remote_size)
+    elif hasattr(reader, "read"):
+        stream = reader
+    else:
+        raise TypeError(f"unsupported reader type: {type(reader)}")
+
+    return stage_stream_to_blockfs(
+        metadata_root=metadata_root,
+        payload_target=payload_target,
+        stream=stream,
+        target_relative_path=target_relative_path,
+        size=remote_size,
+        chunk_size=chunk_size,
+        ctl_client=ctl_client,
+        allow_overwrite=allow_overwrite,
+        mode=mode,
+    )
+
+
+CxbfsStageResult = BlockfsStageResult
+stage_file_to_cxbfs = stage_file_to_blockfs
+stage_stream_to_cxbfs = stage_stream_to_blockfs
+stage_download_to_cxbfs = stage_download_to_blockfs
+stage_from_network_server_cxbfs = stage_from_network_server
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="satfs.blockfs", description="SATFS BlockFS staging and management")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    stage_file_parser = subparsers.add_parser("stage-file", help="Stage a local file into blockfs")
+    stage_file_parser.add_argument("--metadata-root", required=True, help="BlockFS metadata directory")
+    stage_file_parser.add_argument("--payload-target", default=None, help="Payload device or file path")
+    stage_file_parser.add_argument("--file", required=True, help="Local file to stage")
+    stage_file_parser.add_argument("--target-path", default=None, help="Dataset relative path")
+    stage_file_parser.add_argument("--ctl-device", default=None, help="Control device for kernel registration")
+    stage_file_parser.add_argument("--allow-overwrite", action="store_true", help="Allow overwriting existing files")
+
+    stage_dl_parser = subparsers.add_parser("stage-download", help="Download and stage a remote URL directly into blockfs")
+    stage_dl_parser.add_argument("--metadata-root", required=True, help="BlockFS metadata directory")
+    stage_dl_parser.add_argument("--payload-target", default=None, help="Payload device or file path")
+    stage_dl_parser.add_argument("--url", required=True, help="Remote URL to download")
+    stage_dl_parser.add_argument("--target-path", required=True, help="Dataset relative path")
+    stage_dl_parser.add_argument("--ctl-device", default=None, help="Control device for kernel registration")
+    stage_dl_parser.add_argument("--allow-overwrite", action="store_true", help="Allow overwriting existing files")
+
+    sync_parser = subparsers.add_parser("sync", help="Synchronize metadata to kernel blockfs device")
+    sync_parser.add_argument("--metadata-root", required=True, help="BlockFS metadata directory")
+    sync_parser.add_argument("--ctl-device", default=None, help="Control device")
+
+    args = parser.parse_args(argv)
+
+    if args.command == "stage-file":
+        ctl = LinuxBlockfsControl(args.ctl_device) if args.ctl_device else None
+        res = stage_file_to_blockfs(
+            metadata_root=args.metadata_root,
+            payload_target=args.payload_target,
+            source_file_path=args.file,
+            target_relative_path=args.target_path,
+            ctl_client=ctl,
+            allow_overwrite=args.allow_overwrite,
+        )
+        print(f"staged {res.path}: inode={res.inode_number} size={res.size} hash={res.file_hash.hex()} published={res.published_to_kernel}")
+        return 0
+    elif args.command == "stage-download":
+        ctl = LinuxBlockfsControl(args.ctl_device) if args.ctl_device else None
+        res = stage_download_to_blockfs(
+            metadata_root=args.metadata_root,
+            payload_target=args.payload_target,
+            url=args.url,
+            target_relative_path=args.target_path,
+            ctl_client=ctl,
+            allow_overwrite=args.allow_overwrite,
+        )
+        print(f"staged {res.path}: inode={res.inode_number} size={res.size} hash={res.file_hash.hex()} published={res.published_to_kernel}")
+        return 0
+    elif args.command == "sync":
+        ctl = LinuxBlockfsControl(args.ctl_device)
+        ns = BlockfsNamespaceStore().load(args.metadata_root)
+        hints = BlockfsExtentHintStore().load_if_exists(args.metadata_root)
+        ctl.publish_namespace(ns)
+        if hints:
+            ctl.publish_extent_hints(hints, allow_unsupported=True)
+        print(f"synchronized namespace ({len(ns.files)} files) and extents ({len(hints.extents) if hints else 0})")
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

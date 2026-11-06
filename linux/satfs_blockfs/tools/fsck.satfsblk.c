@@ -10,9 +10,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "../cxnfs_blockfs_disk.h"
-#include "../cxnfs_blockfs_meta.h"
-#include "cxnfs_tool_common.h"
+#include "../satfs_blockfs_disk.h"
+#include "../satfs_blockfs_meta.h"
+#include "satfs_tool_common.h"
 
 struct fsck_options {
 	const char *path;
@@ -115,8 +115,9 @@ static int check_super(const struct cxnfs_disk_super *super, uint64_t *blocks)
 	uint64_t zone_start;
 	uint64_t zone_count_blocks;
 
-	if (memcmp(super->magic, CXNFS_DISK_MAGIC, CXNFS_DISK_MAGIC_LEN) != 0) {
-		fprintf(stderr, "bad CXNFS magic\n");
+	if (memcmp(super->magic, SATFS_DISK_MAGIC, SATFS_DISK_MAGIC_LEN) != 0 &&
+	    memcmp(super->magic, CXNFS_DISK_MAGIC, CXNFS_DISK_MAGIC_LEN) != 0) {
+		fprintf(stderr, "bad SAT-FS magic\n");
 		return -1;
 	}
 	if (version != CXNFS_DISK_VERSION) {
@@ -256,12 +257,17 @@ static int check_metadata_root(const char *root,
 			return -1;
 	}
 
-	if (snprintf(path, sizeof(path), "%s/root.cxn", root) >=
+	if (snprintf(path, sizeof(path), "%s/root.sat", root) >=
 	    (int)sizeof(path))
 		return -1;
 	if (stat(path, &st) != 0) {
-		perror(path);
-		return -1;
+		if (snprintf(path, sizeof(path), "%s/root.cxn", root) >=
+		    (int)sizeof(path))
+			return -1;
+		if (stat(path, &st) != 0) {
+			perror(path);
+			return -1;
+		}
 	}
 	if (!S_ISREG(st.st_mode)) {
 		fprintf(stderr, "%s is not a regular metadata-root header\n",
@@ -286,8 +292,8 @@ static int check_metadata_root(const char *root,
 	}
 	close(fd);
 
-	if (memcmp(header.magic, CXNFS_META_ROOT_MAGIC, CXNFS_META_MAGIC_LEN) !=
-	    0) {
+	if (memcmp(header.magic, SATFS_META_ROOT_MAGIC, SATFS_META_MAGIC_LEN) != 0 &&
+	    memcmp(header.magic, CXNFS_META_ROOT_MAGIC, CXNFS_META_MAGIC_LEN) != 0) {
 		fprintf(stderr, "%s has bad metadata-root magic\n", path);
 		return -1;
 	}
@@ -338,6 +344,7 @@ static int write_fsck_report(const struct fsck_options *opts,
 	if (fd < 0)
 		return -1;
 	if (dprintf(fd,
+		    "satfs.blockfs.fsck.v1\n"
 		    "cxnfs.blockfs.fsck.v1\n"
 		    "path=%s\n"
 		    "blocks=%llu\n"

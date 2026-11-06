@@ -11,7 +11,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-#include "../cxnfs_blockfs_uapi.h"
+#include "../satfs_blockfs_uapi.h"
 
 static void usage(const char *prog)
 {
@@ -884,8 +884,12 @@ static int load_namespace_sidecar(const char *metadata_root,
 	char path[PATH_MAX];
 	uint64_t version;
 
-	if (path_join(path, metadata_root, "namespace/current.cxn") != 0)
+	if (path_join(path, metadata_root, "namespace/current.sat") != 0)
 		return -1;
+	if (access(path, R_OK) != 0) {
+		if (path_join(path, metadata_root, "namespace/current.cxn") != 0)
+			return -1;
+	}
 	if (load_properties(path, namespace_props) != 0)
 		return -1;
 	if (property_u64(namespace_props, "version", &version) != 0 ||
@@ -908,8 +912,12 @@ static int load_extent_sidecar(const char *metadata_root,
 	char path[PATH_MAX];
 	uint64_t version;
 
-	if (path_join(path, metadata_root, "extent-hints/current.cxn") != 0)
+	if (path_join(path, metadata_root, "extent-hints/current.sat") != 0)
 		return -1;
+	if (access(path, R_OK) != 0) {
+		if (path_join(path, metadata_root, "extent-hints/current.cxn") != 0)
+			return -1;
+	}
 	if (access(path, R_OK) != 0) {
 		if (!required && errno == ENOENT) {
 			memset(extent_props, 0, sizeof(*extent_props));
@@ -1074,6 +1082,7 @@ static int write_sidecar_sync_report(
 	if (fd < 0)
 		return -1;
 	if (dprintf(fd,
+		    "satfs.blockfs.sidecar-sync.v1\n"
 		    "cxnfs.blockfs.sidecar-sync.v1\n"
 		    "metadata_root=%s\n"
 		    "generation=%llu\n"
@@ -1200,7 +1209,7 @@ out:
 int main(int argc, char **argv)
 {
 	const char *prog = argv[0];
-	const char *device = "/dev/cxnfs_blockfs_ctl";
+	const char *device = access("/dev/satfs_blockfs_ctl", F_OK) == 0 ? "/dev/satfs_blockfs_ctl" : "/dev/cxnfs_blockfs_ctl";
 	const char *command;
 
 	if (argc < 2) {
