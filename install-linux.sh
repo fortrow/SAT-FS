@@ -96,8 +96,12 @@ if [ -z "$FUSE_ADAPTER" ] && [ -f "$SCRIPT_DIR/target/native/cxnfs-fuse" ]; then
 fi
 
 if [ "$SKIP_JAR" -ne 1 ]; then
-  [ -f "$JAR_PATH" ] || die "missing CXNFS jar: $JAR_PATH"
-  [ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR"
+  if [ ! -d "$LIB_DIR" ] && command -v mvn >/dev/null 2>&1; then
+    echo "install-linux.sh: staging runtime dependency jars into $LIB_DIR..."
+    (cd "$SCRIPT_DIR" && mvn dependency:copy-dependencies -DoutputDirectory="$LIB_DIR" -DincludeScope=runtime -DskipTests >/dev/null 2>&1) || true
+  fi
+  [ -f "$JAR_PATH" ] || die "missing CXNFS jar: $JAR_PATH (run: mvn package -DskipTests, or pass --skip-jar for tools only)"
+  [ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR (run: mvn package -DskipTests, or pass --skip-jar for tools only)"
 fi
 [ -z "$FUSE_ADAPTER" ] || [ -f "$FUSE_ADAPTER" ] || die "missing native FUSE adapter: $FUSE_ADAPTER"
 [ -f "$SCRIPT_DIR/packaging/bin/cxnfs" ] || die "missing packaging/bin/cxnfs"
