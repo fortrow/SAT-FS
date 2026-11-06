@@ -58,7 +58,6 @@ function(cxnfs_tool target source)
 		VERBATIM
 	)
 	add_custom_target(${target} DEPENDS "${output}")
-	add_dependencies(${target} prepare-build-env)
 endfunction()
 
 cxnfs_tool(mkfs.satfsblk
@@ -98,7 +97,22 @@ add_custom_target(tool-symlinks
 	VERBATIM
 )
 
-add_custom_target(tools DEPENDS ${CXNFS_TOOL_TARGETS} tool-symlinks)
+add_custom_target(tools ALL DEPENDS ${CXNFS_TOOL_TARGETS} tool-symlinks)
+
+install(PROGRAMS "${CXNFS_TOOL_OUTPUT_DIR}/mkfs.satfsblk" "${CXNFS_TOOL_OUTPUT_DIR}/fsck.satfsblk"
+	DESTINATION sbin
+)
+install(PROGRAMS "${CXNFS_TOOL_OUTPUT_DIR}/mkfs.cxnfsblk" "${CXNFS_TOOL_OUTPUT_DIR}/fsck.cxnfsblk"
+	DESTINATION sbin
+)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	install(PROGRAMS "${CXNFS_TOOL_OUTPUT_DIR}/satfs-blockfs-ctl" "${CXNFS_TOOL_OUTPUT_DIR}/ctl_probe"
+		DESTINATION bin
+	)
+	install(PROGRAMS "${CXNFS_TOOL_OUTPUT_DIR}/cxnfs-blockfs-ctl"
+		DESTINATION bin
+	)
+endif()
 
 add_custom_target(tool-smoke
 	COMMAND "${CMAKE_COMMAND}" -E env "CXNFS_TOOL_SMOKE_REPORT_DIR=${CMAKE_BINARY_DIR}/tool-smoke-reports" sh "${CMAKE_CURRENT_SOURCE_DIR}/tools/tool-smoke.sh" "${CXNFS_TOOL_OUTPUT_DIR}"

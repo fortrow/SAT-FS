@@ -163,7 +163,7 @@ public final class TransferChecksums {
     private static void ensureZeroPowers(int maxBit) {
         synchronized (ZERO_POWER_LOCK) {
             while (ZERO_POWERS.size() <= maxBit) {
-                ZeroPower previous = ZERO_POWERS.getLast();
+                ZeroPower previous = ZERO_POWERS.get(ZERO_POWERS.size() - 1);
                 ZERO_POWERS.add(new ZeroPower(
                         previous.length() << 1,
                         combine(previous.crc(), previous.crc(), previous.length())

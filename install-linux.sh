@@ -275,6 +275,12 @@ find_blockfs_tool() {
   return 1
 }
 
+if [ -z "$(find_blockfs_tool "mkfs.satfsblk" 2>/dev/null || true)" ] && [ -d "$SCRIPT_DIR/linux/satfs_blockfs/tools" ]; then
+  if command -v make >/dev/null 2>&1 && command -v cc >/dev/null 2>&1; then
+    make -C "$SCRIPT_DIR/linux/satfs_blockfs/tools" all >/dev/null 2>&1 || true
+  fi
+fi
+
 MKFS_TOOL=$(find_blockfs_tool "mkfs.satfsblk" || find_blockfs_tool "mkfs.cxnfsblk" || true)
 if [ -n "$MKFS_TOOL" ]; then
   install_file 0755 "$MKFS_TOOL" "$SBIN_DIR/mkfs.satfsblk"

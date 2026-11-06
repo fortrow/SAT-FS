@@ -232,42 +232,16 @@ static int require_dir(const char *root, const char *subdir)
 	return 0;
 }
 
-static int check_metadata_root(const char *root,
+static int check_metadata_file(const char *path,
 			       const struct cxnfs_disk_super *super)
 {
-	static const char *subdirs[] = {
-		"auth", "namespace", "files", "manifests",
-		"chunks", "cache", "journals", "allocation",
-	};
 	struct cxnfs_meta_root_header header;
-	char path[PATH_MAX];
 	struct stat st;
 	int fd;
 
-	if (stat(root, &st) != 0) {
-		perror(root);
-		return -1;
-	}
-	if (!S_ISDIR(st.st_mode)) {
-		fprintf(stderr, "%s is not a directory\n", root);
-		return -1;
-	}
-	for (size_t i = 0; i < sizeof(subdirs) / sizeof(subdirs[0]); i++) {
-		if (require_dir(root, subdirs[i]) != 0)
-			return -1;
-	}
-
-	if (snprintf(path, sizeof(path), "%s/root.sat", root) >=
-	    (int)sizeof(path))
-		return -1;
 	if (stat(path, &st) != 0) {
-		if (snprintf(path, sizeof(path), "%s/root.cxn", root) >=
-		    (int)sizeof(path))
-			return -1;
-		if (stat(path, &st) != 0) {
-			perror(path);
-			return -1;
-		}
+		perror(path);
+		return -1;
 	}
 	if (!S_ISREG(st.st_mode)) {
 		fprintf(stderr, "%s is not a regular metadata-root header\n",
@@ -321,6 +295,52 @@ static int check_metadata_root(const char *root,
 	if (header.readahead_pages != super->readahead_pages) {
 		fprintf(stderr, "%s readahead pages does not match block image\n",
 			path);
+		return -1;
+	}
+	return 0;
+}
+
+static int check_metadata_root(const char *root,
+			       const struct cxnfs_disk_super *super)
+{
+	static const char *subdirs[] = {
+		"auth", "namespace", "files", "manifests",
+		"chunks", "cache", "journals", "allocation",
+	};
+	struct stat st;
+	char sat_path[PATH_MAX];
+	char cxn_path[PATH_MAX];
+	int checked = 0;
+
+	if (stat(root, &st) != 0) {
+		perror(root);
+		return -1;
+	}
+	if (!S_ISDIR(st.st_mode)) {
+		fprintf(stderr, "%s is not a directory\n", root);
+		return -1;
+	}
+	for (size_t i = 0; i < sizeof(subdirs) / sizeof(subdirs[0]); i++) {
+		if (require_dir(root, subdirs[i]) != 0)
+			return -1;
+	}
+
+	if (snprintf(sat_path, sizeof(sat_path), "%s/root.sat", root) < (int)sizeof(sat_path)) {
+		if (access(sat_path, F_OK) == 0) {
+			if (check_metadata_file(sat_path, super) != 0)
+				return -1;
+			checked++;
+		}
+	}
+	if (snprintf(cxn_path, sizeof(cxn_path), "%s/root.cxn", root) < (int)sizeof(cxn_path)) {
+		if (access(cxn_path, F_OK) == 0) {
+			if (check_metadata_file(cxn_path, super) != 0)
+				return -1;
+			checked++;
+		}
+	}
+	if (checked == 0) {
+		fprintf(stderr, "%s: neither root.sat nor root.cxn found\n", root);
 		return -1;
 	}
 

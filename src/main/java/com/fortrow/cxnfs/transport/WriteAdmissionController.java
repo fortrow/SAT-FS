@@ -23,7 +23,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public final class WriteAdmissionController {
-    private static final long DEFAULT_FLOW_CONTROL_WINDOW_BYTES = 1024L * 1024 * 1024;
+    private static final long DEFAULT_FLOW_CONTROL_WINDOW_BYTES = 512L * 1024 * 1024;
 
     private final WriteAdmissionPolicy policy;
     private final CordPoolConfig cordPool;
