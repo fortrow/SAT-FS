@@ -1471,7 +1471,14 @@ final class CxnfsCliTest {
                 inodeNumber,
                 length
         ));
-        assertTrue(script.toFile().setExecutable(true));
+        try {
+            java.nio.file.Files.setPosixFilePermissions(
+                    script,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x")
+            );
+        } catch (UnsupportedOperationException ignored) {
+            assertTrue(script.toFile().setExecutable(true, false));
+        }
         return script;
     }
 

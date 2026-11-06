@@ -244,7 +244,21 @@ public final class LinuxBlockfsControlCommand {
             throw new IllegalArgumentException("command is required");
         }
         validateProcessTimeout(processTimeout);
-        Process process = new ProcessBuilder(command).start();
+        Process process;
+        try {
+            process = new ProcessBuilder(command).start();
+        } catch (IOException e) {
+            String prog = command.get(0);
+            Path progPath = Path.of(prog);
+            if (java.nio.file.Files.isRegularFile(progPath) && isScriptFile(progPath)) {
+                List<String> fallback = new ArrayList<>(command.size() + 1);
+                fallback.add("/bin/sh");
+                fallback.addAll(command);
+                process = new ProcessBuilder(fallback).start();
+            } else {
+                throw e;
+            }
+        }
         CompletableFuture<byte[]> stdoutFuture = readFullyAsync(process.getInputStream());
         CompletableFuture<byte[]> stderrFuture = readFullyAsync(process.getErrorStream());
         try {
@@ -340,6 +354,16 @@ public final class LinuxBlockfsControlCommand {
         process.destroy();
         if (process.isAlive()) {
             process.destroyForcibly();
+        }
+    }
+
+    private static boolean isScriptFile(Path path) {
+        try (InputStream in = java.nio.file.Files.newInputStream(path)) {
+            byte[] header = new byte[2];
+            int n = in.read(header);
+            return n == 2 && header[0] == '#' && header[1] == '!';
+        } catch (Exception ignored) {
+            return false;
         }
     }
 

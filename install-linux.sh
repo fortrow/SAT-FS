@@ -277,7 +277,7 @@ find_blockfs_tool() {
 
 if [ -z "$(find_blockfs_tool "mkfs.satfsblk" 2>/dev/null || true)" ] && [ -d "$SCRIPT_DIR/linux/satfs_blockfs/tools" ]; then
   if command -v make >/dev/null 2>&1 && command -v cc >/dev/null 2>&1; then
-    make -C "$SCRIPT_DIR/linux/satfs_blockfs/tools" all >/dev/null 2>&1 || true
+    make -C "$SCRIPT_DIR/linux/satfs_blockfs/tools" all || true
   fi
 fi
 
@@ -285,12 +285,14 @@ MKFS_TOOL=$(find_blockfs_tool "mkfs.satfsblk" || find_blockfs_tool "mkfs.cxnfsbl
 if [ -n "$MKFS_TOOL" ]; then
   install_file 0755 "$MKFS_TOOL" "$SBIN_DIR/mkfs.satfsblk"
   (cd "$(target_path "$SBIN_DIR")" && ln -sf mkfs.satfsblk mkfs.sat-fs && ln -sf mkfs.satfsblk mkfs.cxnfsblk)
+  (cd "$(target_path "$BIN_DIR")" && ln -sf "$SBIN_DIR/mkfs.satfsblk" mkfs.satfsblk && ln -sf "$SBIN_DIR/mkfs.satfsblk" mkfs.sat-fs && ln -sf "$SBIN_DIR/mkfs.satfsblk" mkfs.cxnfsblk)
 fi
 
 FSCK_TOOL=$(find_blockfs_tool "fsck.satfsblk" || find_blockfs_tool "fsck.cxnfsblk" || true)
 if [ -n "$FSCK_TOOL" ]; then
   install_file 0755 "$FSCK_TOOL" "$SBIN_DIR/fsck.satfsblk"
   (cd "$(target_path "$SBIN_DIR")" && ln -sf fsck.satfsblk fsck.sat-fs && ln -sf fsck.satfsblk fsck.cxnfsblk)
+  (cd "$(target_path "$BIN_DIR")" && ln -sf "$SBIN_DIR/fsck.satfsblk" fsck.satfsblk && ln -sf "$SBIN_DIR/fsck.satfsblk" fsck.sat-fs && ln -sf "$SBIN_DIR/fsck.satfsblk" fsck.cxnfsblk)
 fi
 
 CTL_TOOL=$(find_blockfs_tool "satfs-blockfs-ctl" || find_blockfs_tool "cxnfs-blockfs-ctl" || true)
