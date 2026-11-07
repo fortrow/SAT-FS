@@ -21,6 +21,14 @@ Run the macOS installer:
 ```bash
 sudo ./install-macos.sh --jar target/cxnfs-0.1.0.jar --lib-dir target/runtime-libs
 ```
+To automatically download FUSE-T (headers and dylib), compile the adapter locally, and install everything in one step:
+```bash
+sudo ./install-macos.sh --download-fuse-t
+```
+Or if FUSE-T is already installed (via Homebrew `brew install --cask fuse-t` or official pkg) and you want to build the native adapter from source:
+```bash
+sudo ./install-macos.sh --build-fuse-t
+```
 Optionally installs the macOS FUSE-T adapter:
 ```bash
 install -m 0755 target/native/cxnfs-fuse-t /usr/local/bin/cxnfs-fuse-t

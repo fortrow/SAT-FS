@@ -7,6 +7,12 @@ JAR_PATH="${CXNFS_JAR:-}"
 LIB_DIR="${CXNFS_LIB_DIR:-}"
 JFLUX_CORE="${CXNFS_JFLUX_CORE:-}"
 FUSE_T_ADAPTER="${CXNFS_FUSE_T_ADAPTER:-}"
+FUSE_T_ROOT="${FUSE_T_ROOT:-/Library/Application Support/fuse-t}"
+FUSE_T_INCLUDE_DIR="${FUSE_T_INCLUDE_DIR:-}"
+FUSE_T_LIB_DIR="${FUSE_T_LIB_DIR:-}"
+FUSE_T_VERSION="${FUSE_T_VERSION:-1.2.6}"
+BUILD_FUSE_T=0
+DOWNLOAD_FUSE_T=0
 PREFIX="${CXNFS_PREFIX:-/opt/cxnfs}"
 BIN_DIR="${CXNFS_BIN_DIR:-/usr/local/bin}"
 TOOLS_DIR="${CXNFS_TOOLS_DIR:-}"
@@ -36,6 +42,16 @@ Options:
   --fuse-t-adapter <path>
                         Native macOS FUSE-T adapter. Defaults to
                         target/native/cxnfs-fuse-t when present.
+  --build-fuse-t        Build native FUSE-T adapter locally from source.
+  --download-fuse-t     Download FUSE-T headers and libraries (Homebrew or
+                        official release package) and build the adapter.
+  --fuse-t-root <path>  FUSE-T root directory. Default:
+                        /Library/Application Support/fuse-t.
+  --fuse-t-include <path>
+                        FUSE-T include directory (containing fuse/fuse.h).
+  --fuse-t-lib <path>   FUSE-T library directory (containing libfuse-t*.dylib).
+  --fuse-t-version <ver>
+                        FUSE-T release version to download. Default: 1.2.6.
   --skip-jar            Skip jar installation.
   --prefix <path>       Runtime install directory. Default: /opt/cxnfs.
   --bin-dir <path>      Launcher install directory. Default: /usr/local/bin.
@@ -57,12 +73,98 @@ target_path() {
   printf '%s%s' "$DESTDIR" "$1"
 }
 
+download_fuse_t() {
+  include_dir="${FUSE_T_INCLUDE_DIR:-$FUSE_T_ROOT/include}"
+  lib_dir="${FUSE_T_LIB_DIR:-$FUSE_T_ROOT/lib}"
+
+  if [ -f "$include_dir/fuse/fuse.h" ] || [ -f "$include_dir/fuse.h" ]; then
+    if [ -f "$lib_dir/libfuse-t-1.2.6.dylib" ] || [ -f "$lib_dir/libfuse-t.dylib" ]; then
+      echo "FUSE-T headers and libraries already found under $FUSE_T_ROOT"
+      return 0
+    fi
+  fi
+
+  echo "FUSE-T not found locally. Attempting installation / download..."
+  if command -v brew >/dev/null 2>&1; then
+    echo "Attempting to install FUSE-T via Homebrew..."
+    brew install --cask fuse-t 2>/dev/null || brew install macos-fuse-t/homebrew-cask/fuse-t 2>/dev/null || true
+    if [ -f "$include_dir/fuse/fuse.h" ] || [ -f "$include_dir/fuse.h" ]; then
+      echo "Successfully installed FUSE-T via Homebrew."
+      return 0
+    fi
+  fi
+
+  PKG_URL="https://github.com/macos-fuse-t/fuse-t/releases/download/${FUSE_T_VERSION}/fuse-t-macos-installer-${FUSE_T_VERSION}.pkg"
+  TMP_PKG="/tmp/fuse-t-installer-${FUSE_T_VERSION}.pkg"
+  echo "Downloading FUSE-T ${FUSE_T_VERSION} from $PKG_URL..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -fSL "$PKG_URL" -o "$TMP_PKG"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -O "$TMP_PKG" "$PKG_URL"
+  else
+    die "neither curl nor wget available to download FUSE-T package"
+  fi
+
+  [ -f "$TMP_PKG" ] || die "failed to download FUSE-T package from $PKG_URL"
+
+  if [ -z "$DESTDIR" ] && [ "$(id -u)" -eq 0 ] && command -v installer >/dev/null 2>&1; then
+    echo "Installing FUSE-T package to system..."
+    installer -pkg "$TMP_PKG" -target /
+    rm -f "$TMP_PKG"
+  else
+    echo "Extracting FUSE-T package payload..."
+    EXTRACT_DIR="${SCRIPT_DIR}/target/native/fuse-t-dist"
+    rm -rf "$EXTRACT_DIR"
+    mkdir -p "$EXTRACT_DIR"
+    if command -v pkgutil >/dev/null 2>&1; then
+      pkgutil --expand-full "$TMP_PKG" "$EXTRACT_DIR/pkg" 2>/dev/null || pkgutil --expand "$TMP_PKG" "$EXTRACT_DIR/pkg" 2>/dev/null || true
+    fi
+    found_root=$(find "$EXTRACT_DIR" -type d -name "fuse-t" 2>/dev/null | head -n 1 || true)
+    if [ -n "$found_root" ] && [ -d "$found_root" ]; then
+      FUSE_T_ROOT="$found_root"
+      FUSE_T_INCLUDE_DIR="$found_root/include"
+      FUSE_T_LIB_DIR="$found_root/lib"
+      echo "FUSE-T payload staged under $FUSE_T_ROOT"
+    fi
+    rm -f "$TMP_PKG"
+  fi
+}
+
+build_fuse_t() {
+  if [ "$DOWNLOAD_FUSE_T" -eq 1 ]; then
+    download_fuse_t
+  fi
+
+  include_dir="${FUSE_T_INCLUDE_DIR:-$FUSE_T_ROOT/include}"
+  lib_dir="${FUSE_T_LIB_DIR:-$FUSE_T_ROOT/lib}"
+
+  if [ ! -f "$include_dir/fuse/fuse.h" ] && [ ! -f "$include_dir/fuse.h" ]; then
+    die "missing FUSE-T headers in $include_dir; pass --download-fuse-t or install with 'brew install --cask fuse-t'"
+  fi
+  if [ ! -f "$lib_dir/libfuse-t-1.2.6.dylib" ] && [ ! -f "$lib_dir/libfuse-t.dylib" ]; then
+    die "missing FUSE-T library in $lib_dir; pass --download-fuse-t or install with 'brew install --cask fuse-t'"
+  fi
+
+  echo "Compiling native FUSE-T adapter..."
+  FUSE_T_ROOT="$FUSE_T_ROOT" \
+  FUSE_T_INCLUDE_DIR="$include_dir" \
+  FUSE_T_LIB_DIR="$lib_dir" \
+    "$SCRIPT_DIR/native/fuse-t/build-macos.sh" "$SCRIPT_DIR/target/native/cxnfs-fuse-t"
+  FUSE_T_ADAPTER="$SCRIPT_DIR/target/native/cxnfs-fuse-t"
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --jar) JAR_PATH="${2:-}"; shift 2 ;;
     --lib-dir) LIB_DIR="${2:-}"; shift 2 ;;
     --jflux-core) JFLUX_CORE="${2:-}"; shift 2 ;;
     --fuse-t-adapter) FUSE_T_ADAPTER="${2:-}"; shift 2 ;;
+    --build-fuse-t) BUILD_FUSE_T=1; shift ;;
+    --download-fuse-t) DOWNLOAD_FUSE_T=1; BUILD_FUSE_T=1; shift ;;
+    --fuse-t-root) FUSE_T_ROOT="${2:-}"; shift 2 ;;
+    --fuse-t-include|--fuse-t-include-dir) FUSE_T_INCLUDE_DIR="${2:-}"; shift 2 ;;
+    --fuse-t-lib|--fuse-t-lib-dir) FUSE_T_LIB_DIR="${2:-}"; shift 2 ;;
+    --fuse-t-version) FUSE_T_VERSION="${2:-}"; shift 2 ;;
     --skip-jar) SKIP_JAR=1; shift ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     --bin-dir) BIN_DIR="${2:-}"; shift 2 ;;
@@ -92,15 +194,21 @@ if [ "$SKIP_JAR" -ne 1 ]; then
   [ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR"
 fi
 
-if [ -z "$FUSE_T_ADAPTER" ]; then
+if [ "$BUILD_FUSE_T" -eq 1 ]; then
+  build_fuse_t
+elif [ -z "$FUSE_T_ADAPTER" ]; then
   if [ -f "$SCRIPT_DIR/target/native/cxnfs-fuse-t" ]; then
     FUSE_T_ADAPTER="$SCRIPT_DIR/target/native/cxnfs-fuse-t"
   elif [ -f "$SCRIPT_DIR/native/fuse-t/build-macos.sh" ] && [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
-    fuse_t_header="${FUSE_T_INCLUDE_DIR:-${FUSE_T_ROOT:-/Library/Application Support/fuse-t}/include}/fuse/fuse.h"
-    fuse_t_lib="${FUSE_T_LIB_DIR:-${FUSE_T_ROOT:-/Library/Application Support/fuse-t}/lib}"
-    if [ -f "$fuse_t_header" ] && { [ -f "$fuse_t_lib/libfuse-t-1.2.6.dylib" ] || [ -f "$fuse_t_lib/libfuse-t.dylib" ]; }; then
-      echo "Building native FUSE-T adapter..."
-      if "$SCRIPT_DIR/native/fuse-t/build-macos.sh" "$SCRIPT_DIR/target/native/cxnfs-fuse-t" >/dev/null 2>&1; then
+    fuse_t_header="${FUSE_T_INCLUDE_DIR:-${FUSE_T_ROOT}/include}/fuse/fuse.h"
+    fuse_t_lib="${FUSE_T_LIB_DIR:-${FUSE_T_ROOT}/lib}"
+    if { [ -f "$fuse_t_header" ] || [ -f "${FUSE_T_INCLUDE_DIR:-${FUSE_T_ROOT}/include}/fuse.h" ]; } && \
+       { [ -f "$fuse_t_lib/libfuse-t-1.2.6.dylib" ] || [ -f "$fuse_t_lib/libfuse-t.dylib" ]; }; then
+      echo "FUSE-T detected. Building native adapter..."
+      if FUSE_T_ROOT="$FUSE_T_ROOT" \
+         FUSE_T_INCLUDE_DIR="${FUSE_T_INCLUDE_DIR:-$FUSE_T_ROOT/include}" \
+         FUSE_T_LIB_DIR="${FUSE_T_LIB_DIR:-$FUSE_T_ROOT/lib}" \
+         "$SCRIPT_DIR/native/fuse-t/build-macos.sh" "$SCRIPT_DIR/target/native/cxnfs-fuse-t" >/dev/null 2>&1; then
         FUSE_T_ADAPTER="$SCRIPT_DIR/target/native/cxnfs-fuse-t"
       fi
     fi
