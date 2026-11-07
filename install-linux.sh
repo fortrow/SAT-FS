@@ -33,8 +33,9 @@ Options:
   --jar <path>          Built CXNFS jar. Defaults to target/cxnfs-0.1.0.jar.
   --lib-dir <path>      Directory containing runtime dependency jars.
                         Defaults to target/runtime-libs.
-  --jflux-core <path>   JFlux core jar. Defaults to ~/STRATO/jflux/target/jflux-1.0.6-core.jar
-                        or ../jflux/target/jflux-1.0.6-core.jar.
+  --jflux-core <path>   JFlux core jar. Defaults to lib/jflux-1.2.1-core.jar,
+                        ~/STRATO/jflux/target/jflux-1.2.1-core.jar,
+                        or ../jflux/target/jflux-1.2.1-core.jar.
   --fuse-adapter <path> Native Linux FUSE adapter. Defaults to
                         target/native/cxnfs-fuse when present.
   --tools-dir <path>    Pre-built blockfs tools directory (mkfs.satfsblk, etc.).
@@ -96,12 +97,11 @@ if [ -z "$FUSE_ADAPTER" ] && [ -f "$SCRIPT_DIR/target/native/cxnfs-fuse" ]; then
 fi
 
 if [ "$SKIP_JAR" -ne 1 ]; then
-  if [ ! -d "$LIB_DIR" ] && command -v mvn >/dev/null 2>&1; then
-    echo "install-linux.sh: staging runtime dependency jars into $LIB_DIR..."
-    (cd "$SCRIPT_DIR" && mvn dependency:copy-dependencies -DoutputDirectory="$LIB_DIR" -DincludeScope=runtime -DskipTests >/dev/null 2>&1) || true
+  if [ ! -d "$LIB_DIR" ] && [ -d "$SCRIPT_DIR/lib" ]; then
+    LIB_DIR="$SCRIPT_DIR/lib"
   fi
-  [ -f "$JAR_PATH" ] || die "missing CXNFS jar: $JAR_PATH (run: mvn package -DskipTests, or pass --skip-jar for tools only)"
-  [ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR (run: mvn package -DskipTests, or pass --skip-jar for tools only)"
+  [ -f "$JAR_PATH" ] || die "missing CXNFS jar: $JAR_PATH"
+  [ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR"
 fi
 [ -z "$FUSE_ADAPTER" ] || [ -f "$FUSE_ADAPTER" ] || die "missing native FUSE adapter: $FUSE_ADAPTER"
 [ -f "$SCRIPT_DIR/packaging/bin/cxnfs" ] || die "missing packaging/bin/cxnfs"
@@ -133,7 +133,15 @@ copy_jflux_core() {
   done
 
   if [ -z "$JFLUX_CORE" ]; then
-    for candidate in "$HOME/STRATO/jflux/target/jflux-1.0.6-core.jar" "$SCRIPT_DIR/../jflux/target/jflux-1.0.6-core.jar"; do
+    for candidate in \
+      "$SCRIPT_DIR/lib/jflux-1.2.1-core.jar" \
+      "$SCRIPT_DIR/lib/jflux-v1.2.1-core.jar" \
+      "$SCRIPT_DIR/packaging/lib/jflux-1.2.1-core.jar" \
+      "$HOME/STRATO/jflux/target/jflux-1.2.1-core.jar" \
+      "$SCRIPT_DIR/../jflux/target/jflux-1.2.1-core.jar" \
+      "$SCRIPT_DIR/lib/jflux-1.0.6-core.jar" \
+      "$HOME/STRATO/jflux/target/jflux-1.0.6-core.jar" \
+      "$SCRIPT_DIR/../jflux/target/jflux-1.0.6-core.jar"; do
       if [ -f "$candidate" ]; then
         JFLUX_CORE="$candidate"
         break
@@ -144,6 +152,22 @@ copy_jflux_core() {
   [ -n "$JFLUX_CORE" ] || die "missing JFlux core jar; pass --jflux-core <path>"
   [ -f "$JFLUX_CORE" ] || die "missing JFlux core jar: $JFLUX_CORE"
   install_file 0644 "$JFLUX_CORE" "$PREFIX/lib/$(basename "$JFLUX_CORE")"
+
+  if [ -d "$SCRIPT_DIR/lib" ]; then
+    for extra_jar in "$SCRIPT_DIR"/lib/*.jar; do
+      if [ -f "$extra_jar" ]; then
+        base_name="$(basename "$extra_jar")"
+        case "$base_name" in
+          *source*.jar|*sources*.jar) ;;
+          *)
+            if [ "$base_name" != "$(basename "$JFLUX_CORE")" ] && [ ! -f "$(target_path "$PREFIX/lib/$base_name")" ]; then
+              install_file 0644 "$extra_jar" "$PREFIX/lib/$base_name"
+            fi
+            ;;
+        esac
+      fi
+    done
+  fi
 }
 
 ensure_service_user() {

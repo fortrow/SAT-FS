@@ -42,7 +42,7 @@ echo Options:
 echo   --jar ^<path^>          Built CXNFS jar. Defaults to target\cxnfs-0.1.0.jar.
 echo   --lib-dir ^<path^>      Directory containing runtime dependency jars.
 echo                          Defaults to target\runtime-libs.
-echo   --jflux-core ^<path^>   JFlux core jar. Defaults to %%USERPROFILE%%\STRATO\jflux\target\jflux-1.0.6-core.jar.
+echo   --jflux-core ^<path^>   JFlux core jar. Defaults to lib\jflux-1.2.1-core.jar or %%USERPROFILE%%\STRATO\jflux\target\jflux-1.2.1-core.jar.
 echo   --winfsp-adapter ^<path^> Pre-built cxnfs-winfsp.exe. Defaults to target\native\cxnfs-winfsp.exe if present.
 echo   --winfsp-msil ^<path^>  WinFsp managed DLL. Defaults to target\native\winfsp-msil.dll if present.
 echo   --service-wrapper ^<path^> Pre-built cxnfs-service.exe. Defaults to target\native\cxnfs-service.exe if present.
@@ -55,7 +55,13 @@ exit /b 0
 :after_parse
 if "%JAR_PATH%"=="" set "JAR_PATH=%SCRIPT_DIR%\target\cxnfs-0.1.0.jar"
 if "%LIB_DIR%"=="" set "LIB_DIR=%SCRIPT_DIR%\target\runtime-libs"
-if "%JFLUX_CORE%"=="" set "JFLUX_CORE=%USERPROFILE%\STRATO\jflux\target\jflux-1.0.6-core.jar"
+if "%JFLUX_CORE%"=="" (
+  if exist "%SCRIPT_DIR%\lib\jflux-1.2.1-core.jar" (
+    set "JFLUX_CORE=%SCRIPT_DIR%\lib\jflux-1.2.1-core.jar"
+  ) else (
+    set "JFLUX_CORE=%USERPROFILE%\STRATO\jflux\target\jflux-1.2.1-core.jar"
+  )
+)
 if "%WINFSP_ADAPTER%"=="" set "WINFSP_ADAPTER=%SCRIPT_DIR%\target\native\cxnfs-winfsp.exe"
 if "%WINFSP_MSIL%"=="" set "WINFSP_MSIL=%SCRIPT_DIR%\target\native\winfsp-msil.dll"
 if "%SERVICE_WRAPPER%"=="" set "SERVICE_WRAPPER=%SCRIPT_DIR%\target\native\cxnfs-service.exe"
@@ -91,6 +97,9 @@ if not exist "%INSTALL_DIR%\lib\jflux-*-core.jar" (
     exit /b 1
   )
   copy /Y "%JFLUX_CORE%" "%INSTALL_DIR%\lib\" >nul
+)
+if exist "%SCRIPT_DIR%\lib\os-platform-finder*.jar" (
+  copy /Y "%SCRIPT_DIR%\lib\os-platform-finder*.jar" "%INSTALL_DIR%\lib\" >nul
 )
 copy /Y "%SCRIPT_DIR%\packaging\bin\cxnfs.cmd" "%INSTALL_DIR%\cxnfs.cmd" >nul
 if exist "%WINFSP_ADAPTER%" (

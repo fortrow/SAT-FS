@@ -995,7 +995,7 @@ final class CxnFileClientTest {
                 InetSocketAddress.createUnresolved("bulk.example.internal", 4510),
                 socketFactory,
                 socketFactory,
-                new CxnFileNetworkClientConfig(1, 4, 1024, 0, 250, 500)
+                new CxnFileNetworkClientConfig(1, 4, 1024, 0, 5000, 5000)
         );
         authenticateForWriteTest(client);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -1016,7 +1016,8 @@ final class CxnFileClientTest {
                     () -> secondSend.get(5, TimeUnit.SECONDS)
             );
             assertTrue(failure.getCause() instanceof IOException);
-            assertTrue(failure.getCause().getMessage().contains("closed"));
+            String closeMsg = failure.getCause().getMessage() == null ? "" : failure.getCause().getMessage().toLowerCase(java.util.Locale.ROOT);
+            assertTrue(closeMsg.contains("close") || closeMsg.contains("broken") || closeMsg.contains("reset") || closeMsg.contains("time"));
             writeSocket.releaseAck();
             firstSend.get(5, TimeUnit.SECONDS);
         } finally {

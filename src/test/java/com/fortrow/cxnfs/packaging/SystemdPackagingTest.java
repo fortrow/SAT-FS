@@ -93,7 +93,7 @@ final class SystemdPackagingTest {
         assertTrue(linux.contains("secure_config_if_present"));
         assertTrue(linux.contains("chown root:\"$SERVICE_USER\""));
         assertTrue(linux.contains("own_served_root_dirs_if_present"));
-        assertTrue(linux.contains("jflux-1.0.6-core.jar"));
+        assertTrue(linux.contains("jflux-1.2.1-core.jar"));
         assertFalse(linux.contains("mvn "));
 
         assertTrue(macos.contains("/var/db/cxnfs"));
@@ -105,7 +105,7 @@ final class SystemdPackagingTest {
         assertTrue(macos.contains("cxnfs-fuse-t"));
         assertTrue(macos.contains("serve.ready-file=$RUN_DIR/server.ready"));
         assertTrue(macos.contains("serve.shutdown-file=$RUN_DIR/server.stop"));
-        assertTrue(macos.contains("jflux-1.0.6-core.jar"));
+        assertTrue(macos.contains("jflux-1.2.1-core.jar"));
         assertFalse(macos.contains("mvn "));
 
         assertTrue(windows.contains("%ProgramFiles%\\CXNFS"));
@@ -118,7 +118,7 @@ final class SystemdPackagingTest {
         assertTrue(windows.contains("serve.shutdown-file=%CONFIG_DIR_PROP%/run/server.stop"));
         assertTrue(windows.contains("serve.daemon-lock-file=%CONFIG_DIR_PROP%/run/server.lock"));
         assertTrue(windows.contains("del /F /Q \"%CONFIG_DIR%\\run\\server.ready\""));
-        assertTrue(windows.contains("jflux-1.0.6-core.jar"));
+        assertTrue(windows.contains("jflux-1.2.1-core.jar"));
         assertFalse(windows.contains("mvn "));
     }
 

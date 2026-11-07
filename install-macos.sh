@@ -28,8 +28,9 @@ Options:
   --jar <path>          Built CXNFS jar. Defaults to target/cxnfs-0.1.0.jar.
   --lib-dir <path>      Directory containing runtime dependency jars.
                         Defaults to target/runtime-libs.
-  --jflux-core <path>   JFlux core jar. Defaults to ~/STRATO/jflux/target/jflux-1.0.6-core.jar
-                        or ../jflux/target/jflux-1.0.6-core.jar.
+  --jflux-core <path>   JFlux core jar. Defaults to lib/jflux-1.2.1-core.jar,
+                        ~/STRATO/jflux/target/jflux-1.2.1-core.jar,
+                        or ../jflux/target/jflux-1.2.1-core.jar.
   --fuse-t-adapter <path>
                         Native macOS FUSE-T adapter. Defaults to
                         target/native/cxnfs-fuse-t.
@@ -115,7 +116,15 @@ copy_jflux_core() {
   done
 
   if [ -z "$JFLUX_CORE" ]; then
-    for candidate in "$HOME/STRATO/jflux/target/jflux-1.0.6-core.jar" "$SCRIPT_DIR/../jflux/target/jflux-1.0.6-core.jar"; do
+    for candidate in \
+      "$SCRIPT_DIR/lib/jflux-1.2.1-core.jar" \
+      "$SCRIPT_DIR/lib/jflux-v1.2.1-core.jar" \
+      "$SCRIPT_DIR/packaging/lib/jflux-1.2.1-core.jar" \
+      "$HOME/STRATO/jflux/target/jflux-1.2.1-core.jar" \
+      "$SCRIPT_DIR/../jflux/target/jflux-1.2.1-core.jar" \
+      "$SCRIPT_DIR/lib/jflux-1.0.6-core.jar" \
+      "$HOME/STRATO/jflux/target/jflux-1.0.6-core.jar" \
+      "$SCRIPT_DIR/../jflux/target/jflux-1.0.6-core.jar"; do
       if [ -f "$candidate" ]; then
         JFLUX_CORE="$candidate"
         break
@@ -126,6 +135,22 @@ copy_jflux_core() {
   [ -n "$JFLUX_CORE" ] || die "missing JFlux core jar; pass --jflux-core <path>"
   [ -f "$JFLUX_CORE" ] || die "missing JFlux core jar: $JFLUX_CORE"
   install_file 0644 "$JFLUX_CORE" "$PREFIX/lib/$(basename "$JFLUX_CORE")"
+
+  if [ -d "$SCRIPT_DIR/lib" ]; then
+    for extra_jar in "$SCRIPT_DIR"/lib/*.jar; do
+      if [ -f "$extra_jar" ]; then
+        base_name="$(basename "$extra_jar")"
+        case "$base_name" in
+          *source*.jar|*sources*.jar) ;;
+          *)
+            if [ "$base_name" != "$(basename "$JFLUX_CORE")" ] && [ ! -f "$(target_path "$PREFIX/lib/$base_name")" ]; then
+              install_file 0644 "$extra_jar" "$PREFIX/lib/$base_name"
+            fi
+            ;;
+        esac
+      fi
+    done
+  fi
 }
 
 write_config() {
