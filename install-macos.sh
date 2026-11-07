@@ -9,6 +9,8 @@ JFLUX_CORE="${CXNFS_JFLUX_CORE:-}"
 FUSE_T_ADAPTER="${CXNFS_FUSE_T_ADAPTER:-}"
 PREFIX="${CXNFS_PREFIX:-/opt/cxnfs}"
 BIN_DIR="${CXNFS_BIN_DIR:-/usr/local/bin}"
+TOOLS_DIR="${CXNFS_TOOLS_DIR:-}"
+SKIP_JAR=0
 CONFIG_DIR="${CXNFS_CONFIG_DIR:-/etc/cxnfs}"
 STATE_DIR="${CXNFS_STATE_DIR:-/var/db/cxnfs}"
 CACHE_DIR="${CXNFS_CACHE_DIR:-/var/cache/cxnfs}"
@@ -33,7 +35,8 @@ Options:
                         or ../jflux/target/jflux-1.2.1-core.jar.
   --fuse-t-adapter <path>
                         Native macOS FUSE-T adapter. Defaults to
-                        target/native/cxnfs-fuse-t.
+                        target/native/cxnfs-fuse-t when present.
+  --skip-jar            Skip jar installation.
   --prefix <path>       Runtime install directory. Default: /opt/cxnfs.
   --bin-dir <path>      Launcher install directory. Default: /usr/local/bin.
   --config-dir <path>   Config directory. Default: /etc/cxnfs.
@@ -60,6 +63,7 @@ while [ $# -gt 0 ]; do
     --lib-dir) LIB_DIR="${2:-}"; shift 2 ;;
     --jflux-core) JFLUX_CORE="${2:-}"; shift 2 ;;
     --fuse-t-adapter) FUSE_T_ADAPTER="${2:-}"; shift 2 ;;
+    --skip-jar) SKIP_JAR=1; shift ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     --bin-dir) BIN_DIR="${2:-}"; shift 2 ;;
     --config-dir) CONFIG_DIR="${2:-}"; shift 2 ;;
@@ -80,13 +84,30 @@ fi
 if [ -z "$LIB_DIR" ]; then
   LIB_DIR="$SCRIPT_DIR/target/runtime-libs"
 fi
-if [ -z "$FUSE_T_ADAPTER" ]; then
-  FUSE_T_ADAPTER="$SCRIPT_DIR/target/native/cxnfs-fuse-t"
+if [ "$SKIP_JAR" -ne 1 ]; then
+  if [ ! -d "$LIB_DIR" ] && [ -d "$SCRIPT_DIR/lib" ]; then
+    LIB_DIR="$SCRIPT_DIR/lib"
+  fi
+  [ -f "$JAR_PATH" ] || die "missing CXNFS jar: $JAR_PATH"
+  [ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR"
 fi
 
-[ -f "$JAR_PATH" ] || die "missing CXNFS jar: $JAR_PATH"
-[ -d "$LIB_DIR" ] || die "missing runtime lib directory: $LIB_DIR"
-[ -f "$FUSE_T_ADAPTER" ] || die "missing native FUSE-T adapter: $FUSE_T_ADAPTER"
+if [ -z "$FUSE_T_ADAPTER" ]; then
+  if [ -f "$SCRIPT_DIR/target/native/cxnfs-fuse-t" ]; then
+    FUSE_T_ADAPTER="$SCRIPT_DIR/target/native/cxnfs-fuse-t"
+  elif [ -f "$SCRIPT_DIR/native/fuse-t/build-macos.sh" ] && [ "$(uname -s 2>/dev/null || echo unknown)" = "Darwin" ]; then
+    fuse_t_header="${FUSE_T_INCLUDE_DIR:-${FUSE_T_ROOT:-/Library/Application Support/fuse-t}/include}/fuse/fuse.h"
+    fuse_t_lib="${FUSE_T_LIB_DIR:-${FUSE_T_ROOT:-/Library/Application Support/fuse-t}/lib}"
+    if [ -f "$fuse_t_header" ] && { [ -f "$fuse_t_lib/libfuse-t-1.2.6.dylib" ] || [ -f "$fuse_t_lib/libfuse-t.dylib" ]; }; then
+      echo "Building native FUSE-T adapter..."
+      if "$SCRIPT_DIR/native/fuse-t/build-macos.sh" "$SCRIPT_DIR/target/native/cxnfs-fuse-t" >/dev/null 2>&1; then
+        FUSE_T_ADAPTER="$SCRIPT_DIR/target/native/cxnfs-fuse-t"
+      fi
+    fi
+  fi
+fi
+
+[ -z "$FUSE_T_ADAPTER" ] || [ -f "$FUSE_T_ADAPTER" ] || die "missing native FUSE-T adapter: $FUSE_T_ADAPTER"
 [ -f "$SCRIPT_DIR/packaging/bin/cxnfs" ] || die "missing packaging/bin/cxnfs"
 
 mkdir_p() {
@@ -208,10 +229,12 @@ mkdir_p 0750 "$LOG_DIR"
 mkdir_p 0755 "$DATASET_DIR"
 mkdir_p 0755 "$OUTPUT_DIR"
 
-install_file 0644 "$JAR_PATH" "$PREFIX/cxnfs.jar"
-(cd "$(target_path "$PREFIX")" && ln -sf cxnfs.jar sat-fs.jar && ln -sf cxnfs.jar satfs.jar)
-copy_dependency_jars
-copy_jflux_core
+if [ "$SKIP_JAR" -ne 1 ]; then
+  install_file 0644 "$JAR_PATH" "$PREFIX/cxnfs.jar"
+  (cd "$(target_path "$PREFIX")" && ln -sf cxnfs.jar sat-fs.jar && ln -sf cxnfs.jar satfs.jar)
+  copy_dependency_jars
+  copy_jflux_core
+fi
 install_file 0755 "$SCRIPT_DIR/packaging/bin/cxnfs" "$BIN_DIR/cxnfs"
 if [ -f "$SCRIPT_DIR/packaging/bin/sat-fs" ]; then
   install_file 0755 "$SCRIPT_DIR/packaging/bin/sat-fs" "$BIN_DIR/sat-fs"
@@ -231,7 +254,15 @@ if [ "$PREFIX" = "/opt/cxnfs" ] || [ "$(basename "$PREFIX")" = "cxnfs" ]; then
   mkdir_p 0755 "$(dirname "$PREFIX")" 2>/dev/null || true
   (cd "$(target_path "$(dirname "$PREFIX")")" && ln -sf "$(basename "$PREFIX")" sat-fs 2>/dev/null && ln -sf "$(basename "$PREFIX")" satfs 2>/dev/null) || true
 fi
-install_file 0755 "$FUSE_T_ADAPTER" "$BIN_DIR/cxnfs-fuse-t"
+if [ -n "$FUSE_T_ADAPTER" ]; then
+  install_file 0755 "$FUSE_T_ADAPTER" "$BIN_DIR/cxnfs-fuse-t"
+  (cd "$(target_path "$BIN_DIR")" && ln -sf cxnfs-fuse-t satfs-fuse-t)
+  for extra_bin in /usr/bin /usr/sbin; do
+    if [ "$extra_bin" != "$BIN_DIR" ] && [ -d "$(target_path "$extra_bin")" ]; then
+      (cd "$(target_path "$extra_bin")" && ln -sf "$BIN_DIR/cxnfs-fuse-t" cxnfs-fuse-t 2>/dev/null && ln -sf "$BIN_DIR/cxnfs-fuse-t" satfs-fuse-t 2>/dev/null) || true
+    fi
+  done
+fi
 write_config
 
 rm -f "$(target_path "$RUN_DIR/server.ready")" \
@@ -241,9 +272,13 @@ rm -f "$(target_path "$RUN_DIR/server.ready")" \
 touch "$(target_path "$LOG_DIR/server.out.log")" "$(target_path "$LOG_DIR/server.err.log")"
 
 echo "Installed CXNFS macOS files."
-echo "Jar: $PREFIX/cxnfs.jar"
+if [ "$SKIP_JAR" -ne 1 ]; then
+  echo "Jar: $PREFIX/cxnfs.jar"
+fi
 echo "Launcher: $BIN_DIR/cxnfs"
-echo "FUSE-T adapter: $BIN_DIR/cxnfs-fuse-t"
+if [ -n "$FUSE_T_ADAPTER" ]; then
+  echo "FUSE-T adapter: $BIN_DIR/cxnfs-fuse-t"
+fi
 echo "Config example: $CONFIG_DIR/server.properties.example"
 echo "Config: $CONFIG_DIR/server.properties"
 echo "Runtime markers are prepared under $RUN_DIR and stale marker files were cleared."

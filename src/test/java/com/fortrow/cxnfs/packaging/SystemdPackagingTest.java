@@ -118,6 +118,7 @@ final class SystemdPackagingTest {
         assertTrue(macos.contains("serve.ready-file=$RUN_DIR/server.ready"));
         assertTrue(macos.contains("serve.shutdown-file=$RUN_DIR/server.stop"));
         assertTrue(macos.contains("jflux-1.2.1-core.jar"));
+        assertTrue(macos.contains("--skip-jar"));
         assertFalse(macos.contains("mvn "));
 
         assertTrue(windows.contains("%ProgramFiles%\\CXNFS"));

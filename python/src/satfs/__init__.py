@@ -558,3 +558,19 @@ __all__ += [
     "satfs_transfer_hash",
 ]
 
+
+def __getattr__(name: str):
+    if name in {
+        "MountAdapterHandoff",
+        "LAUNCH_PLAN_FORMAT",
+        "HANDOFF_FORMAT",
+        "LIST_REPORT_FORMAT",
+        "parse_mount_handoff_text",
+        "build_mount_adapter_handoff",
+        "run_mount_handoff_cli",
+    }:
+        from . import mount_handoff
+        return getattr(mount_handoff, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
