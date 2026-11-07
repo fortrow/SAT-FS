@@ -102,6 +102,10 @@ if exist "%SCRIPT_DIR%\lib\os-platform-finder*.jar" (
   copy /Y "%SCRIPT_DIR%\lib\os-platform-finder*.jar" "%INSTALL_DIR%\lib\" >nul
 )
 copy /Y "%SCRIPT_DIR%\packaging\bin\cxnfs.cmd" "%INSTALL_DIR%\cxnfs.cmd" >nul
+if exist "%SCRIPT_DIR%\packaging\bin\sat-fs.cmd" (
+  copy /Y "%SCRIPT_DIR%\packaging\bin\sat-fs.cmd" "%INSTALL_DIR%\sat-fs.cmd" >nul
+  copy /Y "%SCRIPT_DIR%\packaging\bin\sat-fs.cmd" "%INSTALL_DIR%\satfs.cmd" >nul
+)
 if exist "%WINFSP_ADAPTER%" (
   copy /Y "%WINFSP_ADAPTER%" "%INSTALL_DIR%\cxnfs-winfsp.exe" >nul
 )

@@ -63,6 +63,14 @@ final class SystemdPackagingTest {
         assertTrue(windows.contains("\"%JAVA_BIN%\" -cp \"%CXNFS_CLASSPATH%\" com.fortrow.cxnfs.Cxnfs %*"));
         assertFalse(unix.contains("password"));
         assertFalse(windows.contains("password"));
+
+        Path satfsUnixLauncher = Path.of("packaging/bin/sat-fs");
+        Path satfsWindowsLauncher = Path.of("packaging/bin/sat-fs.cmd");
+        String satfsUnix = Files.readString(satfsUnixLauncher);
+        String satfsWindows = Files.readString(satfsWindowsLauncher);
+        assertTrue(Files.isExecutable(satfsUnixLauncher));
+        assertTrue(satfsUnix.contains("com.fortrow.satfs.Satfs"));
+        assertTrue(satfsWindows.contains("com.fortrow.satfs.Satfs"));
     }
 
     @Test
@@ -80,8 +88,11 @@ final class SystemdPackagingTest {
         assertTrue(linux.contains("target/runtime-libs"));
         assertTrue(linux.contains("target/native/cxnfs-fuse"));
         assertTrue(linux.contains("packaging/bin/cxnfs"));
-        assertTrue(linux.contains("cxnfs-fuse"));
+        assertTrue(linux.contains("packaging/bin/sat-fs"));
         assertTrue(linux.contains("/usr/local/bin"));
+        assertTrue(linux.contains("/usr/bin"));
+        assertTrue(linux.contains("/usr/sbin"));
+        assertTrue(linux.contains("cxnfs-fuse"));
         assertTrue(linux.contains("/etc/cxnfs"));
         assertTrue(linux.contains("/run/cxnfs"));
         assertTrue(linux.contains("server.properties.example"));
@@ -101,6 +112,7 @@ final class SystemdPackagingTest {
         assertTrue(macos.contains("/usr/local/srv/datasets"));
         assertTrue(macos.contains("/usr/local/srv/cxnfs-outputs"));
         assertTrue(macos.contains("packaging/bin/cxnfs"));
+        assertTrue(macos.contains("packaging/bin/sat-fs"));
         assertTrue(macos.contains("target/native/cxnfs-fuse-t"));
         assertTrue(macos.contains("cxnfs-fuse-t"));
         assertTrue(macos.contains("serve.ready-file=$RUN_DIR/server.ready"));
@@ -111,6 +123,7 @@ final class SystemdPackagingTest {
         assertTrue(windows.contains("%ProgramFiles%\\CXNFS"));
         assertTrue(windows.contains("%ProgramData%\\CXNFS"));
         assertTrue(windows.contains("packaging\\bin\\cxnfs.cmd"));
+        assertTrue(windows.contains("packaging\\bin\\sat-fs.cmd"));
         assertTrue(windows.contains("target\\cxnfs-0.1.0.jar"));
         assertTrue(windows.contains("target\\runtime-libs"));
         assertTrue(windows.contains("serve.ready-file=%CONFIG_DIR_PROP%/run/server.ready"));

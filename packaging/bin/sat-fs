@@ -2,7 +2,15 @@
 set -eu
 
 if [ -z "${SATFS_CLASSPATH:-}" ]; then
-  SATFS_HOME="${SATFS_HOME:-/opt/sat-fs}"
+  if [ -z "${SATFS_HOME:-}" ]; then
+    if [ -d "/opt/sat-fs" ]; then
+      SATFS_HOME="/opt/sat-fs"
+    elif [ -d "/opt/cxnfs" ]; then
+      SATFS_HOME="/opt/cxnfs"
+    else
+      SATFS_HOME="/opt/sat-fs"
+    fi
+  fi
   SATFS_CLASSPATH="${SATFS_HOME}/sat-fs.jar:${SATFS_HOME}/cxnfs.jar:${SATFS_HOME}/lib/*"
 fi
 

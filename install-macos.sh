@@ -209,9 +209,28 @@ mkdir_p 0755 "$DATASET_DIR"
 mkdir_p 0755 "$OUTPUT_DIR"
 
 install_file 0644 "$JAR_PATH" "$PREFIX/cxnfs.jar"
+(cd "$(target_path "$PREFIX")" && ln -sf cxnfs.jar sat-fs.jar && ln -sf cxnfs.jar satfs.jar)
 copy_dependency_jars
 copy_jflux_core
 install_file 0755 "$SCRIPT_DIR/packaging/bin/cxnfs" "$BIN_DIR/cxnfs"
+if [ -f "$SCRIPT_DIR/packaging/bin/sat-fs" ]; then
+  install_file 0755 "$SCRIPT_DIR/packaging/bin/sat-fs" "$BIN_DIR/sat-fs"
+  (cd "$(target_path "$BIN_DIR")" && ln -sf sat-fs satfs)
+fi
+
+for extra_bin in /usr/bin /usr/sbin; do
+  if [ "$extra_bin" != "$BIN_DIR" ]; then
+    mkdir_p 0755 "$extra_bin" 2>/dev/null || true
+    if [ -d "$(target_path "$extra_bin")" ]; then
+      (cd "$(target_path "$extra_bin")" && ln -sf "$BIN_DIR/sat-fs" sat-fs 2>/dev/null && ln -sf "$BIN_DIR/sat-fs" satfs 2>/dev/null && ln -sf "$BIN_DIR/cxnfs" cxnfs 2>/dev/null) || true
+    fi
+  fi
+done
+
+if [ "$PREFIX" = "/opt/cxnfs" ] || [ "$(basename "$PREFIX")" = "cxnfs" ]; then
+  mkdir_p 0755 "$(dirname "$PREFIX")" 2>/dev/null || true
+  (cd "$(target_path "$(dirname "$PREFIX")")" && ln -sf "$(basename "$PREFIX")" sat-fs 2>/dev/null && ln -sf "$(basename "$PREFIX")" satfs 2>/dev/null) || true
+fi
 install_file 0755 "$FUSE_T_ADAPTER" "$BIN_DIR/cxnfs-fuse-t"
 write_config
 

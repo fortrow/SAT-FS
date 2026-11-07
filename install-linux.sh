@@ -288,6 +288,21 @@ if [ -f "$SCRIPT_DIR/packaging/bin/sat-fs" ]; then
   (cd "$(target_path "$BIN_DIR")" && ln -sf sat-fs satfs)
 fi
 
+# Ensure sat-fs and cxnfs are also accessible in system PATH directories (/usr/bin, /usr/sbin, sbin)
+for extra_bin in /usr/bin /usr/sbin "$SBIN_DIR"; do
+  if [ "$extra_bin" != "$BIN_DIR" ]; then
+    mkdir_p 0755 "$extra_bin" 2>/dev/null || true
+    if [ -d "$(target_path "$extra_bin")" ]; then
+      (cd "$(target_path "$extra_bin")" && ln -sf "$BIN_DIR/sat-fs" sat-fs 2>/dev/null && ln -sf "$BIN_DIR/sat-fs" satfs 2>/dev/null && ln -sf "$BIN_DIR/cxnfs" cxnfs 2>/dev/null) || true
+    fi
+  fi
+done
+
+if [ "$PREFIX" = "/opt/cxnfs" ] || [ "$(basename "$PREFIX")" = "cxnfs" ]; then
+  mkdir_p 0755 "$(dirname "$PREFIX")" 2>/dev/null || true
+  (cd "$(target_path "$(dirname "$PREFIX")")" && ln -sf "$(basename "$PREFIX")" sat-fs 2>/dev/null && ln -sf "$(basename "$PREFIX")" satfs 2>/dev/null) || true
+fi
+
 find_blockfs_tool() {
   tool_name="$1"
   for cand in "$TOOLS_DIR/$tool_name" \
