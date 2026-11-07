@@ -8,11 +8,10 @@ FUSE_T_ROOT="${FUSE_T_ROOT:-/Library/Application Support/fuse-t}"
 INCLUDE_DIR="${FUSE_T_INCLUDE_DIR:-$FUSE_T_ROOT/include}"
 LIB_DIR="${FUSE_T_LIB_DIR:-$FUSE_T_ROOT/lib}"
 
-FUSE_INCLUDE_FLAG="-I$INCLUDE_DIR"
 if [ -f "$INCLUDE_DIR/fuse/fuse.h" ]; then
-  FUSE_INCLUDE_FLAG="-I$INCLUDE_DIR"
+  set -- -I"$INCLUDE_DIR"
 elif [ -f "$INCLUDE_DIR/fuse.h" ]; then
-  FUSE_INCLUDE_FLAG="-I$INCLUDE_DIR -I$(dirname "$INCLUDE_DIR")"
+  set -- -I"$INCLUDE_DIR" -I"$(dirname "$INCLUDE_DIR")"
 else
   echo "build-macos.sh: missing FUSE-T fuse headers under $INCLUDE_DIR" >&2
   exit 1
@@ -35,7 +34,7 @@ cc \
   -Werror \
   -DFUSE_USE_VERSION=29 \
   -D_FILE_OFFSET_BITS=64 \
-  $FUSE_INCLUDE_FLAG \
+  "$@" \
   "$SCRIPT_DIR/cxnfs_fuse_t.c" \
   -L"$LIB_DIR" \
   -Wl,-rpath,"$LIB_DIR" \
